@@ -27,7 +27,7 @@ export interface CollectorWindow {
   dnd?: boolean
 }
 
-const ALERT_SNOOZE_MS = 10 * 60 * 1000 // '나중에' 후 재알림 유예
+const ALERT_SNOOZE_MS = 30 * 60 * 1000 // '나중에' 후 재알림 유예
 // 규칙서 3.스트레스 개입(앱 측 레이어): 하루 개입 상한 3회 + 쿨다운 — 서버 prompt 여부와 별개로 과잉 개입 차단
 const DAILY_CAP = 3
 const COOLDOWN_MS = 30 * 60 * 1000

@@ -49,8 +49,8 @@ import { DEFAULT_HEALTH_CONFIG, TIMING_LABEL, MISSED_DOSE_GUIDE, type HealthConf
 import { petPixelSize, spriteUrl } from './sprites'
 
 type Reminder = { kind: ReminderKind; id: string; label: string }
-const SNOOZE_MS = 10 * 60 * 1000
-const REMINDER_AUTO_MS = 45 * 1000 // 무응답 시 자동 닫힘(벌점 없음 · 클릭 가로채기 방지)
+const SNOOZE_MS = 30 * 60 * 1000
+const REMINDER_AUTO_MS = 30 * 1000 // 무응답 시 자동 닫힘(벌점 없음 · 클릭 가로채기 방지)
 
 const WANDER_MS = 33
 const IDLE_SPEED = 0.8
