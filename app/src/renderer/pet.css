@@ -1,0 +1,387 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: transparent; overflow: hidden; user-select: none; }
+
+.overlay { width: 100vw; height: 100vh; position: relative; }
+
+.dnd-badge {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(40, 40, 44, 0.82);
+  color: #fff;
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.pet { position: relative; cursor: grab; }
+.pet:active { cursor: grabbing; }
+
+.pet__flip { width: 100%; height: 100%; }
+.pet__img {
+  display: block;
+  object-fit: contain;
+  image-rendering: auto;
+  transition: width 0.4s ease, height 0.4s ease;
+  transform-origin: center bottom;
+  -webkit-user-drag: none;
+}
+
+/* 모션 (서로 배타적) — still은 애니메이션 없음(정지) */
+.pet__img--walk { animation: waddle 0.45s ease-in-out infinite; }
+.pet__img--blink { animation: blink 0.2s ease; }
+.pet__img--eat { animation: munch 0.34s ease-in-out 3; }
+.pet__img--kiss { animation: kiss 0.5s ease-in-out 2; }
+.pet__img--hug { animation: hug 0.6s ease-in-out 2; }
+
+/* 감정 표현: 단일 스프라이트에 필터 (모션과 별개 축) */
+.pet--sleep .pet__img { animation: none !important; opacity: 0.82; }
+.pet--sad .pet__img { filter: grayscale(0.5) brightness(0.96); }
+.pet--sick .pet__img { filter: hue-rotate(55deg) saturate(0.7) brightness(0.97); }
+.pet--critical .pet__img { filter: saturate(1.5) brightness(0.9) hue-rotate(-18deg); animation: shiver 0.25s linear infinite !important; }
+.pet--dead .pet__img { filter: grayscale(1) brightness(0.7); animation: none !important; }
+
+/* 먹이주기 상태 게이지 (떴다 사라짐) */
+.pet__gauge {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  transform: translateX(-50%);
+  width: 116px;
+  padding: 7px 9px;
+  margin-bottom: 6px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 10px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+  animation: gaugePop 2.5s ease forwards;
+}
+.pet__gauge-head {
+  font-size: 11px;
+  font-weight: 700;
+  color: #333;
+  text-align: center;
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+.gaugebar { display: flex; align-items: center; gap: 5px; }
+.gaugebar__icon { font-size: 11px; width: 14px; text-align: center; }
+.gaugebar__track {
+  flex: 1;
+  height: 7px;
+  background: #e9e9ee;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.gaugebar__fill { display: block; height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+
+/* 산책 말풍선 */
+.pet__bubble {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  max-width: 200px;
+  width: max-content;
+  padding: 7px 11px;
+  background: #ffffff;
+  color: #2b2b2b;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: center;
+  border-radius: 12px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+  animation: bubbleIn 0.25s ease both;
+}
+.pet__bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #ffffff;
+}
+
+/* 알림(복약·물) 말풍선 + 버튼 */
+.pet__reminder {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  width: max-content;
+  max-width: 220px;
+  padding: 9px 11px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.22);
+  text-align: center;
+  animation: bubbleIn 0.2s ease both;
+}
+.pet__reminder::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #ffffff;
+}
+.pet__reminder-text { font-size: 12px; color: #2b2b2b; margin-bottom: 4px; font-weight: 700; }
+.pet__reminder-detail { font-size: 11px; color: #555; margin-bottom: 3px; }
+.pet__reminder-guide { font-size: 10px; color: #8a8a8e; margin: 4px 0 7px; line-height: 1.3; max-width: 200px; }
+.pet__reminder-actions { display: flex; gap: 6px; justify-content: center; }
+.rbtn {
+  border: 1px solid #d8d8dc;
+  background: #f4f4f6;
+  color: #333;
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.rbtn--ok { background: #e4002b; border-color: #e4002b; color: #fff; font-weight: 700; }
+
+@keyframes waddle { 0%, 100% { transform: rotate(-3deg) translateY(0); } 50% { transform: rotate(3deg) translateY(-3px); } }
+@keyframes blink { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(0.86); } }
+@keyframes shiver { 0%, 100% { transform: translateX(-1.5px); } 50% { transform: translateX(1.5px); } }
+@keyframes munch { 0%, 100% { transform: translateY(0) scale(1, 1); } 40% { transform: translateY(4px) scale(1.06, 0.92); } 70% { transform: translateY(-6px) scale(0.96, 1.06); } }
+@keyframes kiss { 0%, 100% { transform: translateX(0) rotate(0); } 50% { transform: translateX(10px) rotate(8deg); } }
+@keyframes hug { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.12, 0.92) translateY(-3px); } }
+@keyframes gaugePop {
+  0% { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  12% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes bubbleIn { 0% { opacity: 0; transform: translateX(-50%) translateY(4px); } 100% { opacity: 1; transform: translateX(-50%) translateY(0); } }
+/* 친구는 둥둥 X — 펫 주변을 JS로 걸어다님 (위치 이동). 움직일 때만 뒤뚱 걷는 모션 */
+.visitor--walk { animation: waddle 0.45s ease-in-out infinite; transform-origin: center bottom; }
+
+/* 외출 배지 */
+.away-badge {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(90, 108, 255, 0.92);
+  color: #fff;
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+/* 레벨업 반짝임 */
+.levelup-fx {
+  font-size: 14px;
+  font-weight: 800;
+  color: #f2b441;
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  animation: levelup 2.2s ease-out forwards;
+}
+@keyframes levelup {
+  0% { opacity: 0; transform: translateY(6px) scale(0.7); }
+  20% { opacity: 1; transform: translateY(0) scale(1.15); }
+  70% { opacity: 1; transform: translateY(-8px) scale(1); }
+  100% { opacity: 0; transform: translateY(-26px) scale(1); }
+}
+
+/* 친구 친밀도 게이지 */
+.intimacy-view {
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 10px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+  padding: 6px 9px;
+  width: 130px;
+  pointer-events: none;
+  animation: bubbleIn 0.2s ease both;
+}
+.intimacy-view__label { font-size: 11px; font-weight: 700; color: #333; display: block; margin-bottom: 4px; }
+.intimacy-view__track { display: block; height: 8px; background: #eee; border-radius: 5px; overflow: hidden; }
+.intimacy-view__fill { display: block; height: 100%; background: #ff6b8a; border-radius: 5px; }
+
+/* 놀이 하트 */
+.play-hearts { font-size: 22px; pointer-events: none; animation: heartUp 1.4s ease-out forwards; }
+@keyframes heartUp {
+  0% { opacity: 0; transform: translateY(0) scale(0.6); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-50px) scale(1.3); }
+}
+
+/* 친구 초대 수락 프롬프트 */
+.invite-prompt {
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  padding: 14px 16px;
+  text-align: center;
+  max-width: 280px;
+}
+.invite-prompt__text { font-size: 13px; color: #2b2b2b; margin-bottom: 10px; }
+.name-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d8d8dc;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 10px;
+  font-family: inherit;
+}
+.name-input:focus { outline: none; border-color: #e4002b; }
+.invite-prompt__actions { display: flex; gap: 8px; justify-content: center; }
+
+/* 스트레스 지수는 게이지로 노출하지 않는다 — 임계 초과 시 완화 프롬프트로만(기획 결정) */
+
+/* 스트레스 개입 프롬프트 — 기존 알림 스타일에 코랄 포인트 */
+.pet__reminder--stress { border-color: #ff8a7a; }
+.pet__reminder--stress .pet__reminder-text { color: #d64c3c; }
+
+/* ── 케어뿡: 완화 오버레이 (라벤더+버터) ── */
+.relief {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(59, 54, 84, 0.42);
+  backdrop-filter: blur(4px);
+  z-index: 60;
+}
+.relief__card {
+  width: min(400px, calc(100vw - 40px));
+  background: #f4f2fb;
+  border-radius: 22px;
+  padding: 28px 26px 18px;
+  box-shadow: 0 18px 50px rgba(35, 30, 60, 0.35);
+  font-family: 'Pretendard', -apple-system, system-ui, sans-serif;
+  color: #3b3654;
+}
+.relief__center { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.relief__title { margin: 10px 0 0; font-size: 19px; font-weight: 800; letter-spacing: -0.02em; }
+.relief__sub { margin: 4px 0 0; font-size: 13px; color: #7a7494; }
+.relief__hint { margin: 12px 0 0; font-size: 11px; color: #7a7494; }
+.relief__count { margin: 6px 0 0; font-size: 42px; font-weight: 800; color: #ff8a7a; font-variant-numeric: tabular-nums; }
+.relief__list { margin: 14px 0 0; padding: 0; list-style: none; font-size: 13px; line-height: 1.9; color: rgba(59, 54, 84, 0.85); }
+.relief__breather { width: 110px; height: 110px; display: grid; place-items: center; }
+.relief__breather img { width: 96px; height: 96px; object-fit: contain; image-rendering: pixelated; }
+.relief__fallback { font-size: 52px; }
+.relief__petzone { position: relative; width: 130px; height: 120px; display: grid; place-items: center; }
+.relief__petbtn {
+  border: none; background: none; padding: 0; cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.relief__petbtn:active { transform: scale(0.92); }
+.relief__petbtn img { width: 100px; height: 100px; object-fit: contain; image-rendering: pixelated; }
+.relief__heart {
+  position: absolute; top: 30px; font-size: 22px; pointer-events: none;
+  animation: relief-heart 1.1s ease-out forwards;
+}
+@keyframes relief-heart {
+  from { opacity: 1; transform: translateY(0) scale(0.7); }
+  to { opacity: 0; transform: translateY(-64px) scale(1.25); }
+}
+.relief__menu { display: flex; flex-direction: column; gap: 10px; }
+.relief__menu button {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  background: #fff;
+  border: 1px solid rgba(185, 174, 232, 0.5);
+  border-radius: 16px;
+  padding: 13px 16px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.relief__menu button:hover { border-color: #b9aee8; background: #faf9ff; }
+.relief__menu-emoji { font-size: 22px; }
+.relief__menu strong { display: block; font-size: 14px; color: #3b3654; }
+.relief__menu small { display: block; font-size: 11.5px; color: #7a7494; margin-top: 1px; }
+.relief__dismiss {
+  display: block; width: 100%; margin-top: 12px;
+  background: none; border: none; cursor: pointer;
+  font-family: inherit; font-size: 12px; color: #7a7494; padding: 8px 0;
+}
+.relief__dismiss:hover { color: #3b3654; }
+
+/* 명상 모드 — 은은한 숨쉬기 애니메이션 */
+.relief__breather--calm img { animation: calmPulse 6s ease-in-out infinite; }
+@keyframes calmPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+
+/* ══ 심호흡 개편 — Apple Watch Breathe·Calm 버블 패턴 ══ */
+.breath { display: flex; flex-direction: column; align-items: center; }
+.breath__phase {
+  margin: 0 0 6px; font-size: 17px; font-weight: 800; letter-spacing: -0.02em;
+  transition: color 0.4s ease;
+}
+.breath__phase--in { color: #2f9d72; }
+.breath__phase--hold { color: #c08a1f; }
+.breath__phase--out { color: #7a6fd0; }
+.breath__arrow { display: inline-block; font-weight: 900; margin-right: 2px; }
+.breath__phase--in .breath__arrow { animation: arrowUp 1.2s ease-in-out infinite; }
+.breath__phase--out .breath__arrow { animation: arrowDown 1.2s ease-in-out infinite; }
+@keyframes arrowUp { 0%, 100% { transform: translateY(1px); } 50% { transform: translateY(-3px); } }
+@keyframes arrowDown { 0%, 100% { transform: translateY(-1px); } 50% { transform: translateY(3px); } }
+
+.breath__stage { position: relative; width: 190px; height: 190px; display: grid; place-items: center; }
+.breath__bubble {
+  position: relative; width: 160px; height: 160px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: radial-gradient(circle at 38% 32%, #eafff5, #bfeeda 55%, #9fd8e8);
+  box-shadow: 0 0 34px rgba(125, 205, 230, 0.55), inset 0 0 22px rgba(255, 255, 255, 0.65);
+  will-change: transform;
+}
+.breath__bubble--hold { animation: holdShimmer 1.6s ease-in-out infinite; }
+@keyframes holdShimmer {
+  0%, 100% { box-shadow: 0 0 34px rgba(240, 200, 110, 0.5), inset 0 0 22px rgba(255, 255, 255, 0.65); }
+  50% { box-shadow: 0 0 48px rgba(240, 200, 110, 0.8), inset 0 0 26px rgba(255, 255, 255, 0.8); }
+}
+.breath__bubble--out { background: radial-gradient(circle at 38% 32%, #f3efff, #d8cff2 55%, #b9aee8); }
+.breath__bubble img { width: 74px; height: 74px; object-fit: contain; image-rendering: pixelated; }
+.breath__ring {
+  position: absolute; inset: -14px; border-radius: 50%;
+  border: 2px solid rgba(159, 216, 232, 0.5);
+}
+.breath__ring--2 { inset: -28px; border-color: rgba(159, 216, 232, 0.25); }
+.breath__count {
+  position: absolute; right: 4px; bottom: 8px;
+  min-width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: #3b3654; color: #fff;
+  font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums;
+  box-shadow: 0 2px 6px rgba(59, 54, 84, 0.3);
+}
+.breath__cycles { margin: 10px 0 2px; display: flex; gap: 7px; }
+.breath__cycles i {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #e0dcec; transition: background 0.3s ease;
+}
+.breath__cycles i.on { background: #7a6fd0; }
+
+/* 명상 — 후광 + 진행 바 + 문구 페이드 */
+.meditate__halo {
+  position: absolute; inset: -18px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(185, 174, 232, 0.35), transparent 70%);
+  animation: calmPulse 6s ease-in-out infinite;
+}
+.relief__breather--calm { position: relative; }
+.meditate__line { animation: lineFade 0.8s ease; }
+@keyframes lineFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.meditate__progress {
+  width: 200px; height: 6px; border-radius: 4px; background: #eeebf6;
+  overflow: hidden; margin: 10px 0 6px;
+}
+.meditate__progress span { display: block; height: 100%; border-radius: 4px; background: #b9aee8; transition: width 1s linear; }
