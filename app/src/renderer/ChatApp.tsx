@@ -13,7 +13,7 @@ import { startOfLocalDay } from '../core/scheduler'
 import { replyEmpathy } from '../core/empathy'
 import { parseTimes, tryParseRegister, registerSummary, type ParsedTime } from '../core/medLui'
 import { normalizeAncestors, xpProgress } from '../core/progression'
-import { spriteUrl, poseUrl } from './sprites'
+import { spriteUrl, poseUrl, roomBgFor } from './sprites'
 
 type ChatMode = 'med' | 'heart' | 'settings' | 'archive'
 
@@ -267,7 +267,7 @@ export default function ChatApp() {
     { hearts: 100, item: '침대' },
     { hearts: 150, item: '사진(탁상)' },
     { hearts: 210, item: '옷장' },
-    { hearts: 280, item: '사진벽걸이' },
+    { hearts: 280, item: '시계벽걸이' },
     { hearts: 340, item: '티비' },
     { hearts: 400, item: '장난감' },
   ]
@@ -474,6 +474,7 @@ export default function ChatApp() {
 
   const petName = pet?.name ?? '퐁이'
   const petImg = pet ? (poseUrl(pet.creature, pet.stage, 'idle') ?? spriteUrl(pet.creature, pet.stage)) : undefined
+  const roomBg = roomBgFor(lifetimeChats)
   const chatMode = mode === 'heart' ? 'heart' : 'med'
   const messages = feeds[chatMode]
 
@@ -558,23 +559,8 @@ export default function ChatApp() {
         )}
         {/* 미니룸 — 가구: 창문·액자·시계·책장·침대·화분·스탠드 */}
         <div className="mh__room">
-          <span className="mh__window" />
-          <span className="mh__frame-pic">🖼️</span>
-          <span className="mh__clock">🕐</span>
-          <div className="mh__shelf">
-            <i /><i /><i />
-          </div>
-          <div className="mh__bed">
-            <span className="mh__bed-pillow" />
-          </div>
-          {/* 방꾸미기 — 누적 하트 단계별 임시 가구 (실제 방 전체 이미지는 추후, 기획서 8번) */}
-          {lifetimeChats >= 150 && <span className="mh__unlock-photo" title="사진(탁상) · 하트 150">🖼️</span>}
-          {lifetimeChats >= 210 && (
-            <span className="mh__unlock-lamp" title="옷장 · 하트 210">
-              <i />
-            </span>
-          )}
-          {lifetimeChats >= 340 && <span className="mh__unlock-bird" title="티비 · 하트 340">📺</span>}
+          {/* 방꾸미기 — 누적 하트 단계별 전체 방 배경 이미지 (0=빈방) */}
+          {roomBg && <img className="mh__room-bg" src={roomBg} alt="" draggable={false} />}
           {/* 먼저 살던 아이들 — 환생해도 집에 작게 남는다 */}
           {normalizeAncestors(pet?.ancestors).slice(-2).map((a, i) => {
             const url = poseUrl(a.creature, 5, 'idle') ?? spriteUrl(a.creature, 5)
@@ -589,8 +575,6 @@ export default function ChatApp() {
               />
             ) : null
           })}
-          <span className="mh__lamp">🛋️</span>
-          <span className="mh__plant">🪴</span>
           <div className="mh__petspot">
             <span className={`mh__rug${lifetimeChats >= 100 ? ' mh__rug--deluxe' : ''}`} />
             {petImg ? (

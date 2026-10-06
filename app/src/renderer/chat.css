@@ -69,6 +69,11 @@ body {
   border: 2px solid #b9cee8;
   border-top: none;
 }
+.mh__room-bg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; image-rendering: auto; z-index: 0;
+}
+.mh__room > *:not(.mh__room-bg) { position: relative; z-index: 1; } /* 펫·문패 등은 배경 위 */
 .mh__room {
   flex: none; position: relative; height: 138px;
   border: 2px solid #b9cee8; border-radius: 9px 9px 0 0;
@@ -114,7 +119,7 @@ body {
 }
 .mh--med .mh__rug { background: var(--mint-soft); box-shadow: inset 0 0 0 3px rgba(79, 196, 147, 0.3); }
 .mh__pet {
-  position: relative; width: 62px; height: 62px; object-fit: contain;
+  position: relative; width: 72px; height: 72px; object-fit: contain;
   image-rendering: pixelated;
   animation: hostBob 2.4s ease-in-out infinite;
 }

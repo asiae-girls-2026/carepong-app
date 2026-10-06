@@ -35,7 +35,7 @@ export function listHybrids(): string[] {
 
 // 성장단계별 표시 크기(px). 눈(얼굴) 크기를 단계 간 일정하게 유지하도록 산출(몸만 커짐).
 export function petPixelSize(stage: number): number {
-  return [0, 72, 81, 96, 96, 109][stage] ?? 96
+  return [0, 84, 95, 112, 112, 126][stage] ?? 112 // 위젯 펫 크기(살짝 키움)
 }
 
 // ── 포즈 시스템 (pets/<creature>/<level>/<pose>.png) ──
@@ -75,4 +75,19 @@ export function poseUrl(creature: string, level: number, pose: string): string |
     if (u) return u
   }
   return undefined
+}
+
+// ── 방 배경 (assets/room/<하트임계>.png) — 방꾸미기 단계별 전체 방 이미지 ──
+const roomModules = import.meta.glob('./assets/room/*.png', { eager: true, import: 'default' }) as Record<string, string>
+const roomBgs: Record<number, string> = {}
+for (const [path, url] of Object.entries(roomModules)) {
+  const m = path.match(/room\/(\d+)\.png$/)
+  if (m) roomBgs[Number(m[1])] = url
+}
+// 누적 하트 수에 맞는 방 배경(없는 단계는 바로 아래 단계로 대체). 0 = 빈방.
+export function roomBgFor(hearts: number): string | undefined {
+  for (const t of [400, 340, 280, 210, 150, 100, 60, 30, 10, 0]) {
+    if (hearts >= t && roomBgs[t]) return roomBgs[t]
+  }
+  return roomBgs[0]
 }
