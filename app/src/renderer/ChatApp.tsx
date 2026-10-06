@@ -1,5 +1,5 @@
 // 퐁이네 미니홈 — 싸이월드 미니홈피 문법(미니룸·책갈피 탭·TODAY)을 빌린 케어퐁 허브(기본 창)
-// 탭 3종: 💊 약지도 / 💛 마음관리 / ⚙️ 설정 (설정 별도 창 없음 — 미니홈에 통합)
+// 탭 3종: 💛 마음관리 / 📔 아카이브(도감) / ⚙️ 설정 (약 등록은 설정 안으로 · 기획서 10·11번)
 // 약 등록은 LUI(대화)·GUI(폼) 두 경로 제공 + 소요시간 자동 계측 → LUI vs GUI 비교 테스트용
 // 공감·약설명 응답은 규칙 기반(Wizard-of-Oz) — LLM 교체 지점: core/empathy.ts, core/drugData.ts
 import { useEffect, useRef, useState, type FormEvent } from 'react'
@@ -625,10 +625,10 @@ export default function ChatApp() {
           <div className="mh__plate">
             {petName} <small>Lv.{pet?.stage ?? 1} · {pet?.generation ?? 1}번째 아이</small>
           </div>
-          <div className="mh__room-stage">
-            🏠 방꾸미기 {roomStage}/9
-            {nextRoom ? ` · 다음 ${nextRoom.item}까지 ${nextRoom.hearts - lifetimeChats}하트` : ' · 완성 🎉'}
-          </div>
+        </div>
+        <div className="mh__room-stage">
+          🏠 방꾸미기 {roomStage}/9
+          {nextRoom ? ` · 다음 ${nextRoom.item}까지 ${nextRoom.hearts - lifetimeChats}하트` : ' · 완성 🎉'}
         </div>
 
         {/* 상태 바 — 행복·건강·기력·XP 상시 표시 */}
@@ -1056,7 +1056,6 @@ export default function ChatApp() {
                       등록
                     </button>
                   </div>
-                  <p className="mh__guide-note">약지도 탭에서는 케어펫과 대화로도 등록할 수 있어요.</p>
                 </div>
 
 
@@ -1083,9 +1082,6 @@ export default function ChatApp() {
 
           {/* 우측 책갈피 탭 */}
           <nav className="mh__tabs">
-            <button className={`mh__tab mh__tab--med${mode === 'med' ? ' on' : ''}`} onClick={() => setMode('med')}>
-              💊<span>약지도</span>
-            </button>
             <button className={`mh__tab mh__tab--heart${mode === 'heart' ? ' on' : ''}`} onClick={() => setMode('heart')}>
               💛<span>마음관리</span>
             </button>
