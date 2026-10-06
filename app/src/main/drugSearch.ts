@@ -1,14 +1,15 @@
 import { ipcMain } from 'electron'
+import { API_BASE } from './apiConfig'
 import type { CatalogItem, CatalogSearchResult } from '../core/catalog'
 
 export type DrugSearchResult = CatalogSearchResult
 // Public API endpoint only: no database credentials or public-data service keys in the app.
-const DEFAULT_API_BASE_URL = 'http://carepong-alb-405431408.ap-northeast-2.elb.amazonaws.com'
+
 
 export async function searchCatalog(query: string): Promise<CatalogSearchResult> {
   if (!query.trim()) return { items: [] }
   try {
-    const base = process.env['CAREPONG_API_BASE_URL'] || DEFAULT_API_BASE_URL
+    const base = API_BASE
     const url = new URL('/v1/catalog/search', base)
     url.searchParams.set('q', query.trim())
     url.searchParams.set('limit', '20')

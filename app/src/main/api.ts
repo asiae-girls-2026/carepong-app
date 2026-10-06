@@ -10,13 +10,19 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import { safeStorage } from 'electron'
+import { API_BASE } from './apiConfig'
 
-const BASE = process.env.CAREPONG_API ?? 'http://localhost:8000'
+const BASE = API_BASE
 const V = `${BASE}/v1`
 const FLUSH_AT = '08:30' // 결정 C: 방해금지 해제 시각 = 이벤트 묶음 전송 시각
 const FLUSH_MAX = 5000 // /events/batch 한 번 최대 건수
 
+let legacyCp: string | null = null
 let token: string | null = null
+let initializing: Promise<void> | null = null
+let flushing: Promise<{ sent: number }> | null = null
+class ApiError extends Error { constructor(public status: number) { super(`API HTTP ${status}`) } }
 let userId: string | null = null
 let appVersion = '0.0.0'
 let queueFile: string | null = null
@@ -48,11 +54,11 @@ async function call(
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(userId ? { 'X-User-Id': userId } : {}), // X-User-Id 는 D07 인증 전 임시
+        ...(legacyCp ? { 'X-User-Id': legacyCp } : {}), // windows/self-reports는 서버 인증 전환까지 회원번호 사용
       },
       body: body ? JSON.stringify(body) : undefined,
     })
-    if (!res.ok) throw new Error(`${method} ${url} → ${res.status}`)
+    if (!res.ok) throw new ApiError(res.status)
     return res.status === 204 ? null : await res.json()
   } finally {
     clearTimeout(t)
@@ -73,20 +79,41 @@ export async function init({
 }): Promise<void> {
   appVersion = ver
   queueFile = path.join(dataDir, 'carepong-events.jsonl')
-  try {
+  fs.mkdirSync(dataDir, { recursive: true })
+  legacyCp = cpNumber
+  const authFile = path.join(dataDir, 'carepong-auth.json')
+  const authenticate = async (): Promise<void> => {
+    if (!safeStorage.isEncryptionAvailable() || safeStorage.getSelectedStorageBackend?.() === 'basic_text') {
+      throw new Error('OS secure token storage unavailable')
+    }
+    if (fs.existsSync(authFile)) {
+      const saved = JSON.parse(fs.readFileSync(authFile, 'utf8'))
+      if (saved.cp_number !== cpNumber || saved.base !== BASE) throw new Error('Saved identity/server mismatch; recovery required')
+      token = safeStorage.decryptString(Buffer.from(saved.encrypted_token, 'base64'))
+      userId = saved.user_id
+      // 401이어도 저장 토큰/회원번호를 지우거나 신규 회원으로 바꾸지 않는다.
+      await call('GET', `${V}/enroll`)
+      return
+    }
     const r = await call('POST', `${V}/enroll`, {
-      cp_number: cpNumber,
-      device_id: deviceId,
-      app_version: ver,
+      cp_number: cpNumber, device_id: deviceId, app_version: ver,
       os: process.platform === 'win32' ? 'windows' : process.platform,
     })
+    if (typeof r.access_token !== 'string' || typeof r.user_id !== 'string') throw new Error('Invalid enrollment response')
+    const encrypted = safeStorage.encryptString(r.access_token).toString('base64')
+    const tmp = `${authFile}.tmp`
+    fs.writeFileSync(tmp, JSON.stringify({ cp_number: cpNumber, base: BASE, user_id: r.user_id, encrypted_token: encrypted }), { mode: 0o600 })
+    fs.renameSync(tmp, authFile)
     token = r.access_token
     userId = r.user_id
-  } catch (e) {
-    userId = cpNumber
-    console.warn('[api] enroll 실패, 오프라인 모드:', (e as Error).message)
   }
-  await flushEvents() // 꺼져 있던 동안 못 보낸 것
+  initializing = authenticate().catch((e) => {
+    console.warn('[api] 인증 실패; 회원번호와 이벤트 큐 유지:', (e as Error).message)
+    if (e instanceof ApiError && (e.status === 401 || e.status === 409)) token = null
+  })
+  await initializing
+  initializing = null
+  await flushEvents()
   scheduleDailyFlush()
 }
 
@@ -179,24 +206,41 @@ export function logEvent(event: string, screen: string | null, props: Record<str
 
 /** 큐를 묶어서 전송. accepted_ids 만 지우고 나머지는 남겨 다음에 다시. 수동 호출도 가능(종료 직전 등) */
 export async function flushEvents(): Promise<{ sent: number }> {
-  if (!queueFile || !fs.existsSync(queueFile)) return { sent: 0 }
-  const lines = fs.readFileSync(queueFile, 'utf8').split('\n').filter(Boolean)
-  if (!lines.length) return { sent: 0 }
-  const events = lines.slice(0, FLUSH_MAX).map((l) => JSON.parse(l))
-  let r
-  try {
-    r = await call('POST', `${V}/events/batch`, { events }, { timeoutMs: 20000 })
-  } catch (e) {
-    console.warn('[api] events/batch 실패, 다음에 재시도:', (e as Error).message)
-    return { sent: 0 }
+  if (initializing) await initializing
+  if (flushing) return flushing
+  flushing = flushQueue().finally(() => { flushing = null })
+  return flushing
+}
+
+async function flushQueue(): Promise<{ sent: number }> {
+  if (!token || !queueFile || !fs.existsSync(queueFile)) return { sent: 0 }
+  let sent = 0
+  const rejected = new Set<string>()
+  while (true) {
+    const lines = fs.readFileSync(queueFile, 'utf8').split('\n').filter(Boolean)
+    const events = lines.map((line) => JSON.parse(line)).filter((e) => !rejected.has(e.client_event_id)).slice(0, FLUSH_MAX)
+    if (!events.length) return { sent }
+    try {
+      const r = await call('POST', `${V}/events/batch`, { events }, { timeoutMs: 20000 })
+      if (!Array.isArray(r.accepted_ids) || !Array.isArray(r.rejected_ids)) throw new Error('Invalid batch response')
+      const submitted = new Set(events.map((e) => e.client_event_id))
+      const done = new Set<string>(r.accepted_ids.filter((id: string) => submitted.has(id)))
+      for (const id of r.rejected_ids) rejected.add(id)
+      if (r.rejected_ids.length) console.warn('[api] rejected 이벤트는 큐에 보관:', r.rejected_ids.length)
+      // 요청 중 추가된 이벤트도 포함해 다시 읽는다. accepted_ids만 삭제한다.
+      const current = fs.readFileSync(queueFile, 'utf8').split('\n').filter(Boolean)
+      const rest = current.filter((line) => !done.has(JSON.parse(line).client_event_id))
+      const tmp = `${queueFile}.tmp`
+      fs.writeFileSync(tmp, rest.length ? rest.join('\n') + '\n' : '')
+      fs.renameSync(tmp, queueFile)
+      sent += done.size
+      if (!done.size || events.length < FLUSH_MAX) return { sent }
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) token = null
+      console.warn('[api] batch 실패; 큐 유지:', (e as Error).message)
+      return { sent }
+    }
   }
-  const done = new Set<string>([...r.accepted_ids, ...r.rejected_ids]) // 거절(이름 오류)도 큐에서 뺌
-  if (r.rejected_ids.length) console.warn('[api] 거절된 이벤트:', r.rejected_ids.length)
-  const rest = lines.filter((l) => !done.has(JSON.parse(l).client_event_id))
-  fs.writeFileSync(queueFile, rest.length ? rest.join('\n') + '\n' : '')
-  logEvent('beta_upload', null, { ok: true, bytes: lines.join('\n').length, sent: r.accepted_ids.length })
-  if (rest.length >= FLUSH_MAX) return flushEvents() // 많이 쌓였으면 이어서
-  return { sent: r.accepted_ids.length }
 }
 
 function scheduleDailyFlush(): void {
