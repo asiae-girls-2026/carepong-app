@@ -31,6 +31,7 @@ body { background: transparent; overflow: hidden; user-select: none; }
 
 /* 모션 (서로 배타적) — still은 애니메이션 없음(정지) */
 .pet__img--walk { animation: waddle 0.45s ease-in-out infinite; }
+.pet__img--pose { animation: none !important; } /* 포즈 이미지 교체 방식 — CSS 모션 없음 */
 .pet__img--blink { animation: blink 0.2s ease; }
 .pet__img--eat { animation: munch 0.34s ease-in-out 3; }
 .pet__img--kiss { animation: kiss 0.5s ease-in-out 2; }

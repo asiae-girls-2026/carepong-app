@@ -37,3 +37,42 @@ export function listHybrids(): string[] {
 export function petPixelSize(stage: number): number {
   return [0, 72, 81, 96, 96, 109][stage] ?? 96
 }
+
+// ── 포즈 시스템 (pets/<creature>/<level>/<pose>.png) ──
+// 레벨=아이템 단계(1=기본·2=턱받이·3=리본 …). 포즈 파일명은 레벨 무관 동일.
+const poseModules = import.meta.glob('./assets/pets/*/*/*.png', {
+  eager: true,
+  import: 'default',
+}) as Record<string, string>
+
+// poses[creature][level][pose] = url
+export const poses: Record<string, Record<number, Record<string, string>>> = {}
+for (const [path, url] of Object.entries(poseModules)) {
+  const m = path.match(/pets\/([^/]+)\/(\d+)\/([^/]+)\.png$/)
+  if (!m) continue
+  const creature = m[1]
+  const level = Number(m[2])
+  const pose = m[3]
+  ;(((poses[creature] ??= {})[level] ??= {}) as Record<string, string>)[pose] = url
+}
+
+export function hasPoses(creature: string): boolean {
+  return poses[creature] !== undefined
+}
+
+// 현재 레벨의 포즈 URL. 해당 레벨 이미지가 없으면 3→2→1 로 자동 대체(Lv.4·5는 Lv.3 사용).
+// 포즈 코드가 없으면 같은 규칙으로 idle 로 대체.
+export function poseUrl(creature: string, level: number, pose: string): string | undefined {
+  const byLv = poses[creature]
+  if (!byLv) return undefined
+  const tryLevels = [level, 3, 2, 1].filter((v, i, a) => a.indexOf(v) === i)
+  for (const lv of tryLevels) {
+    const u = byLv[lv]?.[pose]
+    if (u) return u
+  }
+  for (const lv of tryLevels) {
+    const u = byLv[lv]?.['idle']
+    if (u) return u
+  }
+  return undefined
+}

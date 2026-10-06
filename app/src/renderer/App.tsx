@@ -59,6 +59,9 @@ const IDLE_RANGE = 55
 const WALK_DURATION_MS = 10_000
 const SAVE_INTERVAL_MS = 15_000
 const CHEW_MS = 1000
+const EAT_ANIM_MS = 2200 // 밥 포즈 5컷 재생 길이(연출용 · 게이지 로직과 별개)
+const PAT_ANIM_MS = 1300 // 쓰다듬 포즈 3컷(pat_1→pat_2→face_happy)
+const WALK_FRAME_MS = 180 // 걷기 프레임 전환 간격
 const GAUGE_MS = 2500
 
 const FEED_MSGS = ['냠냠, 잘 먹었어요! 😋', '기운이 나요! 고마워요 🍚', '오물오물… 맛있어요 🥰']
@@ -91,6 +94,51 @@ const ALARM_EVENT_KIND: Record<ReminderKind, 'med' | 'water' | 'stretch' | 'rest
   water: 'water',
   stretch: 'stretch',
   rest: 'rest',
+}
+
+// 현재 상황 → 포즈 코드 선택 (포즈 기획서 v0.3 매핑)
+function pickPose(
+  pet: PetModel,
+  o: {
+    eatUntil: number
+    patUntil: number
+    walkUntil: number
+    moving: boolean
+    facing: number
+    reminderKind?: string
+    night: boolean
+    manualDnd: boolean
+  },
+  now: number,
+): string {
+  const dir = o.facing < 0 ? 'walk_l' : 'walk_r'
+  const walkFrame = (): string => `${dir}_${(Math.floor(now / WALK_FRAME_MS) % 3) + 1}`
+  // 돌봄: 밥 5컷
+  if (now < o.eatUntil) {
+    const seq = ['eat_hungry', 'eat', 'eat_cheek_l', 'eat_cheek_r', 'eat_full']
+    const prog = 1 - (o.eatUntil - now) / EAT_ANIM_MS
+    return seq[Math.min(seq.length - 1, Math.max(0, Math.floor(prog * seq.length)))]
+  }
+  // 돌봄: 쓰다듬 3컷
+  if (now < o.patUntil) {
+    const seq = ['pat_1', 'pat_2', 'face_happy']
+    const prog = 1 - (o.patUntil - now) / PAT_ANIM_MS
+    return seq[Math.min(seq.length - 1, Math.max(0, Math.floor(prog * seq.length)))]
+  }
+  // 산책(진행 중) → 방향별 3프레임 루프
+  if (o.moving && now < o.walkUntil) return walkFrame()
+  // 알람 포즈 (스트레칭=기지개, 휴식=휴식)
+  if (o.reminderKind === 'stretch') return 'stretch_2'
+  if (o.reminderKind === 'rest') return 'rest'
+  // 방해금지: 야간 자동=수면 / 주간 수동=idle
+  if (o.night) return 'sleep'
+  if (o.manualDnd) return 'idle'
+  // 평상시 배회
+  if (o.moving) return walkFrame()
+  // 표정 (상태 지속)
+  if (pet.stats.happiness < 40) return 'face_sad'
+  if (pet.stats.energy < 30) return 'face_sleepy'
+  return 'idle'
 }
 
 export default function App() {
@@ -135,6 +183,8 @@ export default function App() {
   const movingRef = useRef(false)
   const facingRef = useRef(1)
   const chewingRef = useRef(false)
+  const eatUntilRef = useRef(0)
+  const patUntilRef = useRef(0)
   const configRef = useRef<HealthConfig>(DEFAULT_HEALTH_CONFIG)
   const intakeRef = useRef<IntakeLog>(EMPTY_INTAKE)
   const reminderRef = useRef<Reminder | null>(null)
@@ -549,6 +599,13 @@ export default function App() {
     return () => clearInterval(id)
   }, [])
 
+  // 포즈 프레임 틱 — 걷기/밥/쓰다듬 프레임 전환용 리렌더
+  const [, setFrameTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setFrameTick((t) => (t + 1) % 1_000_000), 150)
+    return () => clearInterval(id)
+  }, [])
+
   // 눈깜빡임
   useEffect(() => {
     const id = setInterval(() => {
@@ -777,6 +834,7 @@ export default function App() {
       window.petApi.saveIntake(intakeRef.current)
       chewingRef.current = true
       setChewing(true)
+      eatUntilRef.current = now + EAT_ANIM_MS
       if (chewTimer.current) clearTimeout(chewTimer.current)
       chewTimer.current = setTimeout(() => {
         chewingRef.current = false
@@ -785,6 +843,7 @@ export default function App() {
       showBubble(pick(FEED_MSGS), 3000)
       log('care_action', 'P01', { type: 'feed' })
     } else {
+      patUntilRef.current = Date.now() + PAT_ANIM_MS
       setHearts((h) => h + 1)
       showBubble(pick(PAT_MSGS), 2500)
       log('care_action', 'P01', { type: 'pet' })
@@ -874,6 +933,21 @@ export default function App() {
     ? [reminderMed.dose, reminderMed.timing ? TIMING_LABEL[reminderMed.timing] : null].filter(Boolean).join(' · ')
     : ''
   const restingNow = isResting(Date.now())
+  const poseNow = Date.now()
+  const currentPose = pickPose(
+    pet,
+    {
+      eatUntil: eatUntilRef.current,
+      patUntil: patUntilRef.current,
+      walkUntil: walkUntilRef.current,
+      moving,
+      facing,
+      reminderKind: reminder?.kind,
+      night: isNight(poseNow),
+      manualDnd,
+    },
+    poseNow,
+  )
 
   return (
     <div className="overlay">
@@ -968,6 +1042,7 @@ export default function App() {
             facing={facing}
             stats={pet.stats}
             bubble={bubble}
+            pose={currentPose}
           />
         </div>
       )}

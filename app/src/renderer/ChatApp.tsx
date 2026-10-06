@@ -13,7 +13,7 @@ import { startOfLocalDay } from '../core/scheduler'
 import { replyEmpathy } from '../core/empathy'
 import { parseTimes, tryParseRegister, registerSummary, type ParsedTime } from '../core/medLui'
 import { normalizeAncestors, xpProgress } from '../core/progression'
-import { spriteUrl } from './sprites'
+import { spriteUrl, poseUrl } from './sprites'
 
 type ChatMode = 'med' | 'heart' | 'settings' | 'archive'
 
@@ -279,12 +279,12 @@ export default function ChatApp() {
   const diaryDays = Object.keys(diary).sort().reverse()
   const petCells = [
     ...(pet
-      ? [{ key: 'now', url: spriteUrl(pet.creature, pet.stage), name: pet.name, now: true }]
+      ? [{ key: 'now', url: poseUrl(pet.creature, pet.stage, 'idle') ?? spriteUrl(pet.creature, pet.stage), name: pet.name, now: true }]
       : []),
     ...normalizeAncestors(pet?.ancestors)
       .slice()
       .reverse()
-      .map((a, i) => ({ key: `${a.creature}-${i}`, url: spriteUrl(a.creature, 5), name: a.name, now: false })),
+      .map((a, i) => ({ key: `${a.creature}-${i}`, url: poseUrl(a.creature, 5, 'idle') ?? spriteUrl(a.creature, 5), name: a.name, now: false })),
   ]
 
   const recordDiary = (patch: { mood?: string; moodLabel?: string; note?: string }): void => {
@@ -473,7 +473,7 @@ export default function ChatApp() {
   }
 
   const petName = pet?.name ?? '퐁이'
-  const petImg = pet ? spriteUrl(pet.creature, pet.stage) : undefined
+  const petImg = pet ? (poseUrl(pet.creature, pet.stage, 'idle') ?? spriteUrl(pet.creature, pet.stage)) : undefined
   const chatMode = mode === 'heart' ? 'heart' : 'med'
   const messages = feeds[chatMode]
 
@@ -577,7 +577,7 @@ export default function ChatApp() {
           {lifetimeChats >= 340 && <span className="mh__unlock-bird" title="티비 · 하트 340">📺</span>}
           {/* 먼저 살던 아이들 — 환생해도 집에 작게 남는다 */}
           {normalizeAncestors(pet?.ancestors).slice(-2).map((a, i) => {
-            const url = spriteUrl(a.creature, 5)
+            const url = poseUrl(a.creature, 5, 'idle') ?? spriteUrl(a.creature, 5)
             return url ? (
               <img
                 key={`${a.creature}-${i}`}

@@ -1,6 +1,6 @@
 import type { AnimationState } from './animation'
 import type { Stats } from '../core/types'
-import { spriteUrl, petPixelSize, isHybrid } from './sprites'
+import { spriteUrl, poseUrl, hasPoses, petPixelSize, isHybrid } from './sprites'
 
 // 교배종 스프라이트가 세로로 찌부됨 → 가로를 줄여 정비율 보정
 const HYBRID_SQUISH = 0.85
@@ -17,6 +17,7 @@ interface PetProps {
   facing: number
   stats: Stats
   bubble: string | null
+  pose?: string // 포즈 코드(idle·eat·walk_r_1 …). 있으면 포즈 이미지로 렌더
 }
 
 export default function Pet({
@@ -31,13 +32,17 @@ export default function Pet({
   facing,
   stats,
   bubble,
+  pose,
 }: PetProps) {
-  const url = spriteUrl(creature, stage)
+  const usePose = !!pose && hasPoses(creature)
+  const url = usePose ? poseUrl(creature, stage, pose as string) : spriteUrl(creature, stage)
   const size = petPixelSize(stage)
-  const motion = chewing ? 'eat' : moving ? 'walk' : blink ? 'blink' : 'still'
-  const squish = isHybrid(creature) ? HYBRID_SQUISH : 1
+  // 포즈 모드: 이미지 자체가 동작을 담으므로 CSS 모션·좌우반전 없음(walk_l/walk_r로 방향 표현)
+  const motion = usePose ? 'pose' : chewing ? 'eat' : moving ? 'walk' : blink ? 'blink' : 'still'
+  const squish = usePose ? 1 : isHybrid(creature) ? HYBRID_SQUISH : 1
+  const flipX = usePose ? 1 : facing * squish
   return (
-    <div className={`pet pet--${animation}`} style={{ width: size, height: size }} data-testid="pet">
+    <div className={`pet pet--${usePose ? 'idle' : animation}`} style={{ width: size, height: size }} data-testid="pet">
       {bubble && <div className="pet__bubble">{bubble}</div>}
       {gauge && !bubble && (
         <div className="pet__gauge">
@@ -49,7 +54,7 @@ export default function Pet({
           <GaugeBar icon="⚡" value={stats.energy} color="#f2b441" />
         </div>
       )}
-      <div className="pet__flip" style={{ transform: `scaleX(${facing * squish})` }}>
+      <div className="pet__flip" style={{ transform: `scaleX(${flipX})` }}>
         {url && (
           <img
             className={`pet__img pet__img--${motion}`}
