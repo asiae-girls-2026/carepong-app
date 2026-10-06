@@ -3,6 +3,7 @@
 // 약 등록은 LUI(대화)·GUI(폼) 두 경로 제공 + 소요시간 자동 계측 → LUI vs GUI 비교 테스트용
 // 공감·약설명 응답은 규칙 기반(Wizard-of-Oz) — LLM 교체 지점: core/empathy.ts, core/drugData.ts
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import type { CatalogItem } from '../core/catalog'
 import type { DrugInfo } from '../core/drugData'
 import type { Pet } from '../core/types'
 import type { HealthConfig } from '../core/health'
@@ -180,6 +181,10 @@ export default function ChatApp() {
   const [expandedDay, setExpandedDay] = useState<string | null>(null)
   const [petPage, setPetPage] = useState(0)
   const [diaryPage, setDiaryPage] = useState(0)
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
+  const [selectedProduct, setSelectedProduct] = useState<CatalogItem | null>(null)
+  const [searchStatus, setSearchStatus] = useState('')
+  const [searchRevision, setSearchRevision] = useState(0)
   const [sName, setSName] = useState('') // 설정 탭 약 등록 폼
   const [sTimes, setSTimes] = useState<string[]>(['09:00'])
   const nextId = useRef(3)
@@ -297,6 +302,21 @@ export default function ChatApp() {
     })
   }
 
+  useEffect(() => {
+    let active = true
+    setCatalogItems([])
+    if (!sName.trim() || selectedProduct) { setSearchStatus(''); return }
+    setSearchStatus('검색 중…')
+    const timer = setTimeout(() => {
+      window.careApi.searchDrug(sName).then((result) => {
+        if (!active) return
+        setCatalogItems(result.items)
+        setSearchStatus(result.error ?? (result.items.length ? '후보를 선택해주세요.' : '검색 결과가 없어요. 이름을 바꿔 검색해주세요.'))
+      }).catch(() => { if (active) setSearchStatus('검색에 실패했어요. 다시 시도해주세요.') })
+    }, 300)
+    return () => { active = false; clearTimeout(timer) }
+  }, [sName, selectedProduct, searchRevision])
+
   // ── 약지도: 오늘의 복약 체크 ──
   const takenToday = (medId: string): boolean =>
     (intake.medsTakenAt[medId] ?? 0) >= startOfLocalDay(Date.now())
@@ -308,15 +328,19 @@ export default function ChatApp() {
   }
 
   // ── 약 등록 (LUI·GUI 공용) ──
-  const registerMed = (name: string, times: ParsedTime[]): void => {
+  const registerMed = (name: string, times: ParsedTime[], product?: CatalogItem): void => {
     const med = createMed(
       crypto.randomUUID(),
       name,
-      true,
+      product?.item_type === 'HFF',
       times.map((t) => t.time),
       [],
       { timing: times[0]?.timing },
     )
+    if (product) Object.assign(med, {
+      item_type: product.item_type, product_id: product.product_id,
+      external_id: product.external_id, manufacturer_name: product.manufacturer_name,
+    })
     window.petApi.saveConfig(addMed(config, med))
     setConfig((c) => addMed(c, med))
   }
@@ -326,43 +350,10 @@ export default function ChatApp() {
   }
 
   const handleMedMessage = (text: string, thinkingId: number, started: number): void => {
-    if (wizard?.step === 'name') {
-      const name = text.replace(/등록|해줘|추가/g, '').trim()
-      if (!name) {
-        resolveThinking(thinkingId, { role: 'pet', text: '어떤 약(영양제)인지 이름을 알려주세요!', actions: [HOME_ACTION] }, started)
-        return
-      }
-      setWizard({ step: 'time', name })
-      resolveThinking(
-        thinkingId,
-        { role: 'pet', text: `${name}, 좋아요! 언제 챙겨드릴까요? (예: 아침 / 점심 / 저녁 / 자기 전 / 21:30)`, actions: [HOME_ACTION] },
-        started,
-      )
-      return
-    }
-    if (wizard?.step === 'time') {
-      const times = parseTimes(text)
-      if (times.length === 0) {
-        resolveThinking(
-          thinkingId,
-          { role: 'pet', text: '시간을 잘 못 알아들었어요. "아침", "저녁", "21시 30분"처럼 말해주세요!', actions: [HOME_ACTION] },
-          started,
-        )
-        return
-      }
-      registerMed(wizard.name, times)
-      logReg('lui', luiStartRef.current)
-      luiStartRef.current = null
+    if (wizard || tryParseRegister(text)) {
       setWizard(null)
-      resolveThinking(thinkingId, { role: 'pet', text: registerSummary(wizard.name, times), actions: MED_ENTRY_ACTIONS }, started)
-      return
-    }
-    const oneShot = tryParseRegister(text)
-    if (oneShot) {
-      registerMed(oneShot.name, oneShot.times)
-      logReg('lui', luiStartRef.current ?? started)
-      luiStartRef.current = null
-      resolveThinking(thinkingId, { role: 'pet', text: registerSummary(oneShot.name, oneShot.times), actions: MED_ENTRY_ACTIONS }, started)
+      setMode('settings')
+      resolveThinking(thinkingId, { role: 'pet', text: '설정 탭에서 제품을 검색하고 후보를 선택해 등록해주세요.' }, started)
       return
     }
     if (/오늘/.test(text) && /약|복약/.test(text)) {
@@ -384,9 +375,11 @@ export default function ChatApp() {
     window.careApi
       .searchDrug(text)
       .then((res) => {
-        if (res.items.length > 0) {
+        if (res.error) {
+          resolveThinking(thinkingId, { role: 'pet', text: res.error }, started)
+        } else if (res.items.length > 0) {
           const item = res.items[0]
-          resolveThinking(thinkingId, { role: 'pet', text: item.bboong, card: item }, started)
+          resolveThinking(thinkingId, { role: 'pet', text: `${item.product_name} · ${item.manufacturer_name ?? ''}\n등록은 설정 탭에서 검색 후보를 선택해주세요.` }, started)
         } else {
           resolveThinking(
             thinkingId,
@@ -429,29 +422,13 @@ export default function ChatApp() {
   }
   const handleAction = (msgId: number, action: QuickAction): void => {
     stripActions(msgId)
-    if (action === 'home') {
-      // 흐름 취소 → 처음 선택지로
-      setWizard(null)
-      luiStartRef.current = null
-      guiStartRef.current = null
-      setFeeds((prev) => ({ ...prev, med: prev.med.map((m) => (m.form ? { ...m, form: undefined } : m)) }))
-      push({ role: 'pet', text: '처음으로 돌아왔어요! 무엇을 도와드릴까요? 💊', actions: MED_ENTRY_ACTIONS })
-    } else if (action === 'reg') {
-      push({ role: 'user', text: '약 등록할래' })
-      push({ role: 'pet', text: '좋아요! 어떻게 등록할까요?', actions: REG_HOW_ACTIONS })
+    setWizard(null)
+    if (action === 'reg' || action === 'reg-lui' || action === 'reg-gui') {
+      setMode('settings')
     } else if (action === 'ask') {
-      push({ role: 'user', text: '약이 궁금해' })
-      push({ role: 'pet', text: '궁금한 약 이름을 말해주세요! 쉽게 설명해드릴게요 🔍 (예: 타이레놀, 지르텍, 베아제)', actions: [HOME_ACTION] })
-    } else if (action === 'reg-lui') {
-      luiStartRef.current = Date.now() // 테스트 계측: LUI 시작
-      setWizard({ step: 'name' })
-      push({ role: 'user', text: '말로 등록할래' })
-      push({ role: 'pet', text: '좋아요! 어떤 약(영양제)을 등록할까요? 이름을 알려주세요 💊', actions: [HOME_ACTION] })
-    } else if (action === 'reg-gui') {
-      guiStartRef.current = Date.now() // 테스트 계측: GUI 시작
-      setWizard(null)
-      push({ role: 'user', text: '버튼으로 등록할래' })
-      push({ role: 'pet', text: '여기에 바로 입력해 주세요!', form: true, actions: [HOME_ACTION] })
+      push({ role: 'pet', text: '제품명을 입력하면 검색 후보를 확인할 수 있어요. 등록은 설정 탭에서 진행해주세요.', actions: [HOME_ACTION] })
+    } else {
+      push({ role: 'pet', text: '무엇을 도와드릴까요?', actions: MED_ENTRY_ACTIONS })
     }
   }
 
@@ -1025,8 +1002,26 @@ export default function ChatApp() {
                       className="mh__ginput"
                       placeholder="약/영양제 이름"
                       value={sName}
-                      onChange={(e) => setSName(e.target.value)}
+                      onChange={(e) => { setSelectedProduct(null); setSName(e.target.value) }}
+                      maxLength={200}
+                      aria-label="약·건기식 제품 검색"
                     />
+                    <p role="status" aria-live="polite">{selectedProduct ? `선택: ${selectedProduct.product_name}` : searchStatus}</p>
+                    {!selectedProduct && catalogItems.length > 0 && (
+                      <ul aria-label="제품 검색 후보" style={{ listStyle: 'none', padding: 0, maxHeight: 200, overflowY: 'auto' }}>
+                        {catalogItems.map((item) => (
+                          <li key={`${item.item_type}-${item.product_id}`}>
+                            <button type="button" style={{ width: '100%', textAlign: 'left', padding: 8, marginBottom: 4 }}
+                              onClick={() => { setSelectedProduct(item); setSName(item.product_name); setCatalogItems([]) }}>
+                              {item.product_name}<br /><small>{item.manufacturer_name ?? '제조사 정보 없음'} · {item.item_type === 'DRUG' ? '의약품' : '건강기능식품'}</small>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {!selectedProduct && sName.trim() && searchStatus !== '검색 중…' && (
+                      <button type="button" onClick={() => setSearchRevision((n) => n + 1)}>다시 검색</button>
+                    )}
                     <div className="mh__gtimes">
                       {sTimes.map((t, i) => (
                         <span key={i} className="mh__gtime">
@@ -1046,9 +1041,11 @@ export default function ChatApp() {
                     </div>
                     <button
                       className="mh__gsubmit"
+                      disabled={!selectedProduct || sTimes.some((t) => !t)}
                       onClick={() => {
-                        if (!sName.trim()) return
-                        registerMed(sName.trim(), sTimes.map((t) => ({ time: t, label: t })))
+                        if (!selectedProduct || sTimes.some((t) => !t)) return
+                        registerMed(selectedProduct.product_name, sTimes.map((t) => ({ time: t, label: t })), selectedProduct)
+                        setSelectedProduct(null)
                         setSName('')
                         setSTimes(['09:00'])
                       }}

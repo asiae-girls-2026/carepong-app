@@ -3,6 +3,10 @@ export type MedTiming = 'before_meal' | 'after_meal' | 'bedtime' | 'empty_stomac
 export interface MedSchedule {
   id: string
   name: string
+  item_type?: 'DRUG' | 'HFF' // 기존 로컬 등록과 호환
+  product_id?: number
+  external_id?: string | null
+  manufacturer_name?: string | null
   isSupplement: boolean
   times: string[] // "HH:MM" 24시간 표기
   days: number[] // 0=일 ~ 6=토, 빈 배열이면 매일
