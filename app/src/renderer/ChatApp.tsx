@@ -81,6 +81,9 @@ interface DiaryEntry {
   moodLabel?: string
   notes: string[] // 마음관리에서 남긴 말 (하루 최대 8개, 각 80자)
 }
+const ROOM_ALERT_KEY = 'carepong-roomAlertStage' // 이미 해금 얼럿을 띄운 최고 방꾸미기 단계(재접속에도 유지)
+const loadRoomAlert = (): number => { try { return Number(localStorage.getItem(ROOM_ALERT_KEY)) || 0 } catch { return 0 } }
+const saveRoomAlert = (n: number): void => { try { localStorage.setItem(ROOM_ALERT_KEY, String(n)) } catch { /* noop */ } }
 const DIARY_KEY = 'carepong-diary'
 const loadDiary = (): Record<string, DiaryEntry> => {
   try {
@@ -229,7 +232,8 @@ export default function ChatApp() {
   const [regLogs, setRegLogs] = useState<RegLog[]>(loadRegLogs())
   const [localHearts, setLocalHearts] = useState(0) // 저장소 폴링(2초) 사이 즉시 반영용
   const [unlockMsg, setUnlockMsg] = useState<string | null>(null) // 방꾸미기 해금 얼럿(5#21)
-  const prevRoomStageRef = useRef<number | null>(null)
+  const roomBaselinedRef = useRef(false) // 펫 최초 로드 기준선 설정 여부
+  const alertedStageRef = useRef<number>(loadRoomAlert())
   const [diary, setDiary] = useState<Record<string, DiaryEntry>>(loadDiary())
   const [expandedDay, setExpandedDay] = useState<string | null>(null)
   const [petPage, setPetPage] = useState(0)
@@ -344,19 +348,27 @@ export default function ChatApp() {
       .map((a, i) => ({ key: `${a.creature}-${i}`, url: poseUrl(a.creature, 5, 'idle') ?? spriteUrl(a.creature, 5), name: a.name, now: false })),
   ]
 
-  // 방꾸미기 단계 상승 시 해금 얼럿 (5#21) — 부팅 시(최초 null)엔 알림 없음
+  // 방꾸미기 단계 해금 얼럿 (5#21 · QA 2번 29) — 새 단계 도달 시 "최초 1회만".
+  // 이미 알린 단계는 localStorage에 저장 → 재접속(창 닫았다 열기) 시 재알림 방지.
   useEffect(() => {
-    if (prevRoomStageRef.current === null) { prevRoomStageRef.current = roomStage; return }
-    if (roomStage > prevRoomStageRef.current) {
+    if (!pet) return // 펫 로드 전(roomStage 과도기) 무시
+    if (!roomBaselinedRef.current) {
+      // 최초 로드 시점까지 도달한 단계는 '이미 획득'으로 간주 → 로드/재접속 때 얼럿 안 뜸
+      roomBaselinedRef.current = true
+      if (roomStage > alertedStageRef.current) { alertedStageRef.current = roomStage; saveRoomAlert(roomStage) }
+      return
+    }
+    if (roomStage > alertedStageRef.current) {
       const item = ROOM_STAGES[roomStage - 1]?.item
       if (item) {
         setUnlockMsg(`${item} 생겼어요! 🎉 미니홈을 꾸며보세요`)
         setTimeout(() => setUnlockMsg(null), 3500)
       }
+      alertedStageRef.current = roomStage
+      saveRoomAlert(roomStage)
     }
-    prevRoomStageRef.current = roomStage
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomStage])
+  }, [roomStage, pet])
 
   const recordDiary = (patch: { mood?: string; moodLabel?: string; note?: string }): void => {
     setDiary((prev) => {
