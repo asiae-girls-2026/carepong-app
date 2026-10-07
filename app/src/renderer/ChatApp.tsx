@@ -682,11 +682,6 @@ export default function ChatApp() {
           </div>
         )}
 
-        {/* 1분 쉬어가기 — 오늘의 하트 바로 아래(상시 노출) */}
-        <div className="mh__relief-cta">
-          <button className="mh__chip" onClick={() => window.careApi.openRelief()}>🫧 1분 쉬어가기</button>
-        </div>
-
         <div className="mh__body">
           <div className="mh__content">
             {unlockMsg && <div className="mh__unlock" role="status">{unlockMsg}</div>}
@@ -733,6 +728,9 @@ export default function ChatApp() {
 
             {mode === 'heart' && (
               <>
+                <div className="mh__chips">
+                  <button className="mh__chip" onClick={() => window.careApi.openRelief()}>🫧 1분 쉬어가기</button>
+                </div>
                 {!mood && !moodDoneToday && (
                 <div className="mh__card">
                   <div className="mh__card-head">오늘 기분 어때요?</div>

@@ -645,5 +645,3 @@ body {
 .mh__timesel select { padding: 4px 6px; border: 1px solid #d9d4ea; border-radius: 7px; font-size: 13px; background: #fff; cursor: pointer; }
 .mh__timesel-colon { font-weight: 700; color: #6b6484; }
 /* 1분 쉬어가기 — 오늘의 하트 바로 아래 */
-.mh__relief-cta { padding: 2px 12px 8px; }
-.mh__relief-cta .mh__chip { width: 100%; }

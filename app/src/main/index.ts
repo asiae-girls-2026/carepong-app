@@ -223,16 +223,10 @@ app.on('second-instance', () => {
 })
 
 app.whenReady().then(async () => {
-  createWindow()
-  createTray()
-  initStressManager()
-  initDrugSearch()
-
-  // ── 서버 전송 모듈 초기화 (호출위치표 A) — CP 번호는 앱이 로컬 발급한 회원번호 ──
+  // ── 첫 실행 수집 안내(1#2) — 이름 입력(이름짓기)보다 먼저. [확인]을 눌러야 펫 창이 뜬다 ──
   const health = loadHealth()
-  // 첫 실행 수집 안내(1#2) — 프라이버시 고지 1회
   if (!health.noticeShown) {
-    void dialog.showMessageBox({
+    dialog.showMessageBoxSync({
       type: 'info',
       title: '케어퐁 — 데이터 수집 안내',
       message: '케어퐁은 스트레스 감지를 위해 키보드·마우스 사용 패턴만 분석해요.',
@@ -245,6 +239,13 @@ app.whenReady().then(async () => {
     })
     saveHealth({ ...health, noticeShown: true })
   }
+
+  createWindow()
+  createTray()
+  initStressManager()
+  initDrugSearch()
+
+  // ── 서버 전송 모듈 초기화 (호출위치표 A) — CP 번호는 앱이 로컬 발급한 회원번호 ──
   const cpNumber = health.memberId ?? 'CP-UNSET'
   try {
     await api.init({
