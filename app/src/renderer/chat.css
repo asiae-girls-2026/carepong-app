@@ -613,3 +613,6 @@ body {
 .mh__cal-cell--has { background: #fff3dd; }
 .mh__cal-mood { position: absolute; inset: 0; display: grid; place-items: center; font-size: 15px; padding-top: 3px; }
 .mh__cal-hint { margin-top: 8px; }
+
+/* 회원번호 복사 얼럿 */
+.mh__copied { margin-left: 8px; font-size: 11px; font-weight: 700; color: #3da97c; }

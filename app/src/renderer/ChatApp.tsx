@@ -93,6 +93,17 @@ const dayKeyOf = (ts: number): string => {
   const d = new Date(ts)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
+// 설정 숫자 입력 범위 보정(최소/최대) — 범위 밖 입력 시 clamp (QA 6#9·10·11)
+const clampInt = (v: unknown, lo: number, hi: number): number => {
+  const n = Math.round(Number(v))
+  return isNaN(n) ? lo : Math.min(hi, Math.max(lo, n))
+}
+// 시간 24시제 표시 '13:00'→'13시', '13:30'→'13시 30분' (정화님 요청 · 24시제)
+const fmtTime = (t: string): string => {
+  const [h, m] = (t || '').split(':')
+  if (h === undefined) return t
+  return Number(m) ? `${Number(h)}시 ${Number(m)}분` : `${Number(h)}시`
+}
 // 두세 줄 요약 — 규칙 기반(Wizard-of-Oz). LLM 연동 시 이 함수만 교체하면 된다.
 const summarizeDay = (e: DiaryEntry): string[] => {
   const lines: string[] = []
@@ -195,6 +206,7 @@ export default function ChatApp() {
   const [searchRevision, setSearchRevision] = useState(0)
   const [sName, setSName] = useState('') // 설정 탭 약 등록 폼
   const [sTimes, setSTimes] = useState<string[]>(['09:00'])
+  const [copied, setCopied] = useState(false) // 회원번호 복사 얼럿
   const nextId = useRef(3)
   const feedRef = useRef<HTMLDivElement>(null)
   const modeRef = useRef(mode)
@@ -638,7 +650,7 @@ export default function ChatApp() {
                       {config.medications.map((m) => (
                         <li key={m.id} className={takenToday(m.id) ? 'done' : ''}>
                           <span className="mh__med-name">
-                            💊 {m.name} <small>{m.times.join(', ')}</small>
+                            💊 {m.name} <small>{m.times.map(fmtTime).join(', ')}</small>
                           </span>
                           {takenToday(m.id) ? (
                             <span className="mh__med-done">✅</span>
@@ -862,6 +874,7 @@ export default function ChatApp() {
                       type="number" min={1} max={20}
                       value={config.water.dailyTargetCups}
                       onChange={(e) => persist({ ...config, water: { ...config.water, dailyTargetCups: Number(e.target.value) } })}
+                      onBlur={(e) => persist({ ...config, water: { ...config.water, dailyTargetCups: clampInt(e.target.value, 1, 20) } })}
                     />
                   </label>
                   <label className="mh__row">
@@ -869,9 +882,8 @@ export default function ChatApp() {
                     <input
                       type="number" min={20} max={240} step={10}
                       value={config.water.intervalMinutes}
-                      onChange={(e) =>
-                        persist({ ...config, water: { ...config.water, intervalMinutes: Math.max(20, Number(e.target.value)) } })
-                      }
+                      onChange={(e) => persist({ ...config, water: { ...config.water, intervalMinutes: Number(e.target.value) } })}
+                      onBlur={(e) => persist({ ...config, water: { ...config.water, intervalMinutes: clampInt(e.target.value, 20, 240) } })}
                     />
                   </label>
                   {/* 스트레칭·휴식은 건강 펫의 기본 — 끌 수 없고 간격만 조절 */}
@@ -879,16 +891,18 @@ export default function ChatApp() {
                     스트레칭 간격(분)
                     <input
                       type="number" min={10} max={360} step={10}
-                      value={Math.max(10, aux.stretchMin)}
-                      onChange={(e) => persist({ ...config, aux: { ...aux, stretchMin: Math.max(10, Number(e.target.value)) } })}
+                      value={aux.stretchMin}
+                      onChange={(e) => persist({ ...config, aux: { ...aux, stretchMin: Number(e.target.value) } })}
+                      onBlur={(e) => persist({ ...config, aux: { ...aux, stretchMin: clampInt(e.target.value, 10, 360) } })}
                     />
                   </label>
                   <label className="mh__row">
                     휴식 간격(분)
                     <input
-                      type="number" min={10} max={240} step={5}
-                      value={Math.max(10, aux.restMin)}
-                      onChange={(e) => persist({ ...config, aux: { ...aux, restMin: Math.max(10, Number(e.target.value)) } })}
+                      type="number" min={20} max={240} step={5}
+                      value={aux.restMin}
+                      onChange={(e) => persist({ ...config, aux: { ...aux, restMin: Number(e.target.value) } })}
+                      onBlur={(e) => persist({ ...config, aux: { ...aux, restMin: clampInt(e.target.value, 20, 240) } })}
                     />
                   </label>
                 </div>
@@ -1012,11 +1026,16 @@ export default function ChatApp() {
                     <code>{config.memberId ?? '발급 중…'}</code>
                     <button
                       onClick={() => {
-                        if (config.memberId) void navigator.clipboard?.writeText(config.memberId)
+                        if (config.memberId) {
+                          void navigator.clipboard?.writeText(config.memberId)
+                          setCopied(true)
+                          setTimeout(() => setCopied(false), 1500)
+                        }
                       }}
                     >
                       복사
                     </button>
+                    {copied && <span className="mh__copied" role="status">복사되었습니다</span>}
                   </div>
                   <p className="mh__guide-note">
                     기록·데이터 관리에 쓰는 나만의 고유번호예요.<br />이름이나 연락처와는 연결되지 않아요.
