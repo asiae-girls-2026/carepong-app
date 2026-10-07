@@ -48,7 +48,7 @@ import { isWithinQuiet } from '../core/scheduler'
 import { DEFAULT_HEALTH_CONFIG, TIMING_LABEL, MISSED_DOSE_GUIDE, type HealthConfig } from '../core/health'
 import { petPixelSize, spriteUrl } from './sprites'
 
-type Reminder = { kind: ReminderKind; id: string; label: string }
+type Reminder = { kind: ReminderKind; id: string; label: string; alarmId?: string; shownAt?: string }
 const SNOOZE_MS = 30 * 60 * 1000
 const REMINDER_AUTO_MS = 30 * 1000 // 무응답 시 자동 닫힘(벌점 없음 · 클릭 가로채기 방지)
 
@@ -263,6 +263,11 @@ export default function App() {
     return result.pet
   }
 
+  const alarmProps = (r: Reminder): Record<string, unknown> => ({
+    alarm_id: r.alarmId,
+    shown_at: r.shownAt,
+    ...(r.kind === 'medication' ? { local_medication_id: r.id } : {}),
+  })
   // ── 알람 처리 ──
   const clearReminder = (): void => {
     if (reminderAutoTimer.current) clearTimeout(reminderAutoTimer.current)
@@ -275,7 +280,7 @@ export default function App() {
   const confirmReminder = (): void => {
     const r = reminderRef.current
     if (!r) return
-    log('alarm_answered', 'P02', { kind: ALARM_EVENT_KIND[r.kind], answer: 'confirm' })
+    log('alarm_answered', 'P02', { kind: ALARM_EVENT_KIND[r.kind], answer: 'confirm', ...alarmProps(r) })
     const now = Date.now()
     if (r.kind === 'water') intakeRef.current = recordWater(intakeRef.current, now)
     else if (r.kind === 'medication') intakeRef.current = recordMed(intakeRef.current, r.id, now)
@@ -305,7 +310,7 @@ export default function App() {
   const snoozeReminder = (): void => {
     const r = reminderRef.current
     if (!r) return
-    log('alarm_answered', 'P02', { kind: ALARM_EVENT_KIND[r.kind], answer: 'later' })
+    log('alarm_answered', 'P02', { kind: ALARM_EVENT_KIND[r.kind], answer: 'later', ...alarmProps(r) })
     snoozeRef.current = { ...snoozeRef.current, [r.id]: Date.now() + SNOOZE_MS }
     clearReminder()
   }
@@ -313,7 +318,7 @@ export default function App() {
   const missReminder = (): void => {
     const r = reminderRef.current
     if (!r) return
-    log('alarm_answered', 'P02', { kind: ALARM_EVENT_KIND[r.kind], answer: 'timeout' })
+    log('alarm_answered', 'P02', { kind: ALARM_EVENT_KIND[r.kind], answer: 'timeout', ...alarmProps(r) })
     if (r.kind === 'medication') {
       intakeRef.current = recordMiss(intakeRef.current)
       window.petApi.saveIntake(intakeRef.current)
@@ -506,10 +511,10 @@ export default function App() {
           (d) => (snoozeRef.current[d.id] ?? 0) < now,
         )
         if (due.length === 0) return
-        const r = due[0]
+        const r: Reminder = { ...due[0], alarmId: crypto.randomUUID(), shownAt: new Date(now).toISOString() }
         reminderRef.current = r
         setReminder(r)
-        log('alarm_shown', 'P02', { kind: ALARM_EVENT_KIND[r.kind] })
+        log('alarm_shown', 'P02', { kind: ALARM_EVENT_KIND[r.kind], ...alarmProps(r) })
         window.petApi.notify('케어퐁', REMINDER_UI[r.kind].text(r.label))
         // 약 알람만 즉시 클릭을 잡는다(중요) — 물·스트레칭·휴식은 하던 일 방해 없이,
         // 말풍선에 마우스를 올렸을 때만 버튼이 눌리게 둔다
