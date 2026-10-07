@@ -1045,15 +1045,17 @@ export default function App() {
     poseNow,
   )
 
-  // 말풍선 화면 경계 보정(1#7) — 상단이면 아래로, 좌우 모서리면 안쪽 정렬
-  const bubbleCls = ((): string => {
+  // 화면 경계 보정(1#7) — 상단이면 아래로, 좌우 모서리면 안쪽 정렬. 일반 말풍선·알람 둘 다 적용
+  const edgeCls = (prefix: string): string => {
     const cx = position.x + petSize / 2
     const cls: string[] = []
-    if (position.y < 150) cls.push('pet__bubble--below')
-    if (cx < 120) cls.push('pet__bubble--pinleft')
-    else if (cx > window.innerWidth - 120) cls.push('pet__bubble--pinright')
+    if (position.y < 150) cls.push(`${prefix}--below`)
+    if (cx < 120) cls.push(`${prefix}--pinleft`)
+    else if (cx > window.innerWidth - 120) cls.push(`${prefix}--pinright`)
     return cls.join(' ')
-  })()
+  }
+  const bubbleCls = edgeCls('pet__bubble')
+  const reminderCls = edgeCls('pet__reminder')
 
   return (
     <div className="overlay">
@@ -1107,7 +1109,7 @@ export default function App() {
           }}
         >
           {reminder && (
-            <div className="pet__reminder" onPointerDown={(e) => e.stopPropagation()}>
+            <div className={`pet__reminder${reminderCls ? ' ' + reminderCls : ''}`} onPointerDown={(e) => e.stopPropagation()}>
               <div className="pet__reminder-text">{REMINDER_UI[reminder.kind].text(reminder.label)}</div>
               {reminderDetail && <div className="pet__reminder-detail">{reminderDetail}</div>}
               {reminderMed?.note && <div className="pet__reminder-detail">📌 {reminderMed.note}</div>}
@@ -1123,7 +1125,7 @@ export default function App() {
             </div>
           )}
           {stressAlert && !reminder && (
-            <div className="pet__reminder pet__reminder--stress" onPointerDown={(e) => e.stopPropagation()}>
+            <div className={`pet__reminder pet__reminder--stress${reminderCls ? ' ' + reminderCls : ''}`} onPointerDown={(e) => e.stopPropagation()}>
               <div className="pet__reminder-text">스트레스를 받고 계신 것 같아요 🥺</div>
               <div className="pet__reminder-detail">지금 스트레스를 받고 계신가요?</div>
               <div className="pet__reminder-actions">

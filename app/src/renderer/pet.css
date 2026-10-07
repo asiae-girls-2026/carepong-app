@@ -402,3 +402,9 @@ body { background: transparent; overflow: hidden; user-select: none; }
 .pet__bubble--pinleft { left: 0; transform: translateX(0); }
 .pet__bubble--pinright { left: auto; right: 0; transform: translateX(0); }
 .pet__bubble--pinleft::after, .pet__bubble--pinright::after { display: none; }
+/* 알람 말풍선 경계 보정 (pet__bubble과 동일 규칙) */
+.pet__reminder--below { top: 100%; bottom: auto; margin-top: 8px; margin-bottom: 0; }
+.pet__reminder--below::after { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: #ffffff; }
+.pet__reminder--pinleft { left: 0; transform: translateX(0); }
+.pet__reminder--pinright { left: auto; right: 0; transform: translateX(0); }
+.pet__reminder--pinleft::after, .pet__reminder--pinright::after { display: none; }
