@@ -958,6 +958,7 @@ export default function ChatApp() {
                       onBlur={(e) => persist({ ...config, water: { ...config.water, intervalMinutes: clampInt(e.target.value, 20, 240) } })}
                     />
                   </label>
+                  <div className="mh__stat-row">오늘 마신 물 💧 <b>{waterToday}/{config.water.dailyTargetCups}</b>컵</div>
                   {/* 스트레칭·휴식은 건강 펫의 기본 — 끌 수 없고 간격만 조절 */}
                   <label className="mh__row">
                     스트레칭 간격(분)
@@ -1022,6 +1023,7 @@ export default function ChatApp() {
 
                 <div className="mh__card">
                   <div className="mh__card-head">💊 약 등록 · 관리</div>
+                  <div className="mh__stat-row">복약 놓친 횟수 <b>{intake.medMissed ?? 0}회</b> <small>(30초 무응답 자동 닫힘 · 벌점 없음)</small></div>
                   {config.medications.length > 0 && (
                     <ul className="mh__meds">
                       {config.medications.map((m) => (

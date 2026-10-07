@@ -35,7 +35,7 @@ export const DEFAULT_AUX: AuxConfig = { stretchMin: 240, restMin: 120 }
 export const DEFAULT_HEALTH_CONFIG: HealthConfig = {
   medications: [],
   water: { dailyTargetCups: 8, intervalMinutes: 90 },
-  quietEnabled: true,
+  quietEnabled: false, // 첫 설치 디폴트: 자동 방해금지 해제(야간 포함) — 사용자가 설정에서 켤 수 있음
   // 방해금지 창 = 감지제외 창으로 일원화 (기획서 v7 11.설정 · 1차 기본 18:30~08:30 자동 ON/OFF)
   quietHours: { start: '18:30', end: '08:30' },
   aux: DEFAULT_AUX,

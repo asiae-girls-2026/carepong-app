@@ -648,3 +648,8 @@ body {
 .mh__timesel select { padding: 4px 6px; border: 1px solid #d9d4ea; border-radius: 7px; font-size: 13px; background: #fff; cursor: pointer; }
 .mh__timesel-colon { font-weight: 700; color: #6b6484; }
 /* 1분 쉬어가기 — 오늘의 하트 바로 아래 */
+
+/* 설정탭 통계 행(물 횟수·놓침 횟수) */
+.mh__stat-row { font-size: 12px; font-weight: 600; color: #6b5c3e; padding: 7px 0 2px; }
+.mh__stat-row b { color: #3da97c; font-weight: 800; }
+.mh__stat-row small { color: #a79a82; font-weight: 600; }
