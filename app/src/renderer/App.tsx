@@ -46,7 +46,7 @@ import {
 } from '../core/intake'
 import { isWithinQuiet } from '../core/scheduler'
 import { DEFAULT_HEALTH_CONFIG, TIMING_LABEL, MISSED_DOSE_GUIDE, type HealthConfig } from '../core/health'
-import { petPixelSize, spriteUrl } from './sprites'
+import { petPixelSize, spriteUrl, poseUrl } from './sprites'
 
 type Reminder = { kind: ReminderKind; id: string; label: string; alarmId?: string; shownAt?: string }
 const SNOOZE_MS = 30 * 60 * 1000
@@ -1111,8 +1111,10 @@ export default function App() {
       )}
       {reliefOpen && (
         <ReliefOverlay
-          petImg={spriteUrl(pet.creature, pet.stage) ?? null}
+          petImg={poseUrl(pet.creature, pet.stage, 'idle') ?? spriteUrl(pet.creature, pet.stage) ?? null}
           petName={pet.name}
+          creature={pet.creature}
+          stage={pet.stage}
           onComplete={completeRelief}
           onClose={closeRelief}
           onSelect={selectRelief}

@@ -3,6 +3,7 @@
 // 심호흡 UI는 Apple Watch Breathe·Calm Breathe Bubble 패턴:
 // 들이쉴 때 버블이 크게 팽창, 내쉴 때 수축 + 큰 단계 라벨·카운트다운으로 타이밍을 명확히.
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { poseUrl, spriteUrl } from './sprites'
 
 export type ReliefKind = 'breath' | 'meditate'
 type Mode = 'menu' | ReliefKind
@@ -10,6 +11,8 @@ type Mode = 'menu' | ReliefKind
 interface ReliefOverlayProps {
   petImg: string | null
   petName: string
+  creature: string
+  stage: number
   onComplete: (kind: ReliefKind) => void
   onClose: () => void
   onSelect?: (kind: ReliefKind) => void // 심호흡/명상 선택 시 (relief_selected 기록)
@@ -22,7 +25,7 @@ const BREATH_PHASES = [
 ] as const
 const BREATH_CYCLES = 3
 
-function BreathGuide({ petImg, onDone }: { petImg: string | null; onDone: () => void }) {
+function BreathGuide({ creature, stage, petImg, onDone }: { creature: string; stage: number; petImg: string | null; onDone: () => void }) {
   const [phaseIdx, setPhaseIdx] = useState(0)
   const [cycle, setCycle] = useState(1)
   const [left, setLeft] = useState<number>(BREATH_PHASES[0].secs)
@@ -57,6 +60,12 @@ function BreathGuide({ petImg, onDone }: { petImg: string | null; onDone: () => 
   }, [phaseIdx, cycle])
 
   const scale = started ? phase.scale : 0.55
+  // 들숨=breath_in · 멈춤=breath_in(참은 상태) · 날숨=breath_out
+  const breathImg =
+    poseUrl(creature, stage, phase.key === 'out' ? 'breath_out' : 'breath_in') ??
+    poseUrl(creature, stage, 'idle') ??
+    spriteUrl(creature, stage) ??
+    petImg
   return (
     <div className="breath">
       {/* 단계 라벨 — 지금 뭘 해야 하는지 크게 */}
@@ -72,7 +81,7 @@ function BreathGuide({ petImg, onDone }: { petImg: string | null; onDone: () => 
         >
           <span className="breath__ring" />
           <span className="breath__ring breath__ring--2" />
-          {petImg ? <img src={petImg} alt="" draggable={false} /> : <span className="relief__fallback">🫧</span>}
+          {breathImg ? <img src={breathImg} alt="" draggable={false} /> : <span className="relief__fallback">🫧</span>}
         </div>
         <span className="breath__count" aria-live="polite">{left}</span>
       </div>
@@ -99,7 +108,7 @@ const MEDIT_LINES = [
   '마지막으로 깊게 한 번, 들이쉬고… 내쉬어요',
 ]
 
-function MeditateGuide({ petImg, onDone }: { petImg: string | null; onDone: () => void }) {
+function MeditateGuide({ creature, stage, petImg, onDone }: { creature: string; stage: number; petImg: string | null; onDone: () => void }) {
   const [left, setLeft] = useState(MEDIT_SECONDS)
   const onDoneRef = useRef(onDone)
   onDoneRef.current = onDone
@@ -121,11 +130,17 @@ function MeditateGuide({ petImg, onDone }: { petImg: string | null; onDone: () =
     Math.floor(((MEDIT_SECONDS - left) / MEDIT_SECONDS) * MEDIT_LINES.length),
   )
   const pct = Math.round(((MEDIT_SECONDS - left) / MEDIT_SECONDS) * 100)
+  const meditImg =
+    poseUrl(creature, stage, 'meditate') ??
+    poseUrl(creature, stage, 'rest') ??
+    poseUrl(creature, stage, 'idle') ??
+    spriteUrl(creature, stage) ??
+    petImg
   return (
     <div className="relief__center">
       <div className="relief__breather relief__breather--calm">
         <span className="meditate__halo" />
-        {petImg ? <img src={petImg} alt="" draggable={false} /> : <span className="relief__fallback">🧘</span>}
+        {meditImg ? <img src={meditImg} alt="" draggable={false} /> : <span className="relief__fallback">🧘</span>}
       </div>
       <p key={lineIdx} className="relief__title meditate__line">{MEDIT_LINES[lineIdx]}</p>
       <div className="meditate__progress">
@@ -142,7 +157,7 @@ const MENU = [
 ]
 
 /** 스트레스 임계 초과 시 뜨는 즉시 완화 오버레이 */
-export default function ReliefOverlay({ petImg, petName, onComplete, onClose, onSelect }: ReliefOverlayProps) {
+export default function ReliefOverlay({ petImg, petName, creature, stage, onComplete, onClose, onSelect }: ReliefOverlayProps) {
   const [mode, setMode] = useState<Mode>('menu')
   const [done, setDone] = useState<ReliefKind | null>(null)
   const onCompleteRef = useRef(onComplete)
@@ -192,8 +207,8 @@ export default function ReliefOverlay({ petImg, petName, onComplete, onClose, on
           </>
         ) : (
           <>
-            {mode === 'breath' && <BreathGuide petImg={petImg} onDone={finishBreath} />}
-            {mode === 'meditate' && <MeditateGuide petImg={petImg} onDone={finishMeditate} />}
+            {mode === 'breath' && <BreathGuide creature={creature} stage={stage} petImg={petImg} onDone={finishBreath} />}
+            {mode === 'meditate' && <MeditateGuide creature={creature} stage={stage} petImg={petImg} onDone={finishMeditate} />}
             <button className="relief__dismiss" onClick={onClose}>
               그만하기
             </button>
