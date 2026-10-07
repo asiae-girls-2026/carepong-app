@@ -188,6 +188,7 @@ export default function ChatApp() {
   const [expandedDay, setExpandedDay] = useState<string | null>(null)
   const [petPage, setPetPage] = useState(0)
   const [diaryPage, setDiaryPage] = useState(0)
+  const [calYM, setCalYM] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() } })
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
   const [selectedProduct, setSelectedProduct] = useState<CatalogItem | null>(null)
   const [searchStatus, setSearchStatus] = useState('')
@@ -817,62 +818,37 @@ export default function ChatApp() {
                 <div className="mh__card">
                   <div className="mh__card-head">
                     📔 마음 일기장
-                    {diaryDays.length > DIARY_PER_PAGE && (
-                      <span className="mh__pets-nav">
-                        <button
-                          disabled={diaryPage === 0}
-                          onClick={() => {
-                            setDiaryPage((n) => Math.max(0, n - 1))
-                            setExpandedDay(null)
-                          }}
-                          aria-label="이전"
-                        >
-                          ◀
-                        </button>
-                        <button
-                          disabled={(diaryPage + 1) * DIARY_PER_PAGE >= diaryDays.length}
-                          onClick={() => {
-                            setDiaryPage((n) => n + 1)
-                            setExpandedDay(null)
-                          }}
-                          aria-label="다음"
-                        >
-                          ▶
-                        </button>
-                      </span>
-                    )}
+                    <span className="mh__pets-nav">
+                      <button onClick={() => setCalYM((v) => { const d = new Date(v.y, v.m - 1, 1); return { y: d.getFullYear(), m: d.getMonth() } })} aria-label="이전 달">◀</button>
+                      <button onClick={() => setCalYM((v) => { const d = new Date(v.y, v.m + 1, 1); return { y: d.getFullYear(), m: d.getMonth() } })} aria-label="다음 달">▶</button>
+                    </span>
                   </div>
-                  {diaryDays.length === 0 ? (
-                    <p className="mh__empty">마음관리에서 기분을 고르거나 이야기를 나누면 하루하루 일기가 쌓여요.</p>
-                  ) : (
-                    <ul className="mh__diary">
-                      {diaryDays
-                        .slice(diaryPage * DIARY_PER_PAGE, (diaryPage + 1) * DIARY_PER_PAGE)
-                        .map((day) => {
-                          const e = diary[day]
-                          const open = expandedDay === day
-                          return (
-                            <li key={day} className={open ? 'open' : ''}>
-                              <button className="mh__diary-row" onClick={() => setExpandedDay(open ? null : day)}>
-                                <span className="mh__diary-date">{day.slice(5).replace('-', '/')}</span>
-                                <span className="mh__diary-mood">{e.mood ?? '·'}</span>
-                                <span className="mh__diary-peek">
-                                  {e.notes[0] ? (e.notes[0].length > 16 ? e.notes[0].slice(0, 16) + '…' : e.notes[0]) : e.moodLabel ?? ''}
-                                </span>
-                                <span className="mh__diary-arrow">{open ? '▴' : '▾'}</span>
-                              </button>
-                              {open && (
-                                <div className="mh__diary-summary">
-                                  {summarizeDay(e).map((line, i) => (
-                                    <p key={i}>{line}</p>
-                                  ))}
-                                </div>
-                              )}
-                            </li>
-                          )
-                        })}
-                    </ul>
-                  )}
+                  <p className="mh__cal-title">{calYM.y}년 {calYM.m + 1}월</p>
+                  <div className="mh__cal">
+                    {['일', '월', '화', '수', '목', '금', '토'].map((w) => (
+                      <span key={w} className="mh__cal-wd">{w}</span>
+                    ))}
+                    {Array.from({ length: new Date(calYM.y, calYM.m, 1).getDay() }, (_, i) => (
+                      <span key={`b${i}`} className="mh__cal-cell mh__cal-cell--empty" />
+                    ))}
+                    {Array.from({ length: new Date(calYM.y, calYM.m + 1, 0).getDate() }, (_, i) => {
+                      const day = i + 1
+                      const key = `${calYM.y}-${String(calYM.m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                      const e = diary[key]
+                      const isToday = key === dayKeyOf(Date.now())
+                      return (
+                        <span
+                          key={key}
+                          className={`mh__cal-cell${isToday ? ' mh__cal-cell--today' : ''}${e?.mood ? ' mh__cal-cell--has' : ''}`}
+                          title={e?.mood ? `${e.mood} ${e.moodLabel ?? ''}`.trim() : undefined}
+                        >
+                          <em>{day}</em>
+                          {e?.mood && <span className="mh__cal-mood">{e.mood}</span>}
+                        </span>
+                      )
+                    })}
+                  </div>
+                  <p className="mh__empty mh__cal-hint">날짜마다 그날 고른 기분 이모지가 쌓여요 😊</p>
                 </div>
               </div>
             ) : (
