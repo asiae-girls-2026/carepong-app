@@ -1109,7 +1109,6 @@ export default function ChatApp() {
                       <button onClick={() => window.petApi.debug('gauge0')}>게이지 0</button>
                       <button onClick={() => window.petApi.debug('levelup')}>레벨업</button>
                       <button onClick={() => { window.petApi.debug('heartreset'); setLocalHearts(0) }}>하트 초기화</button>
-                      <button onClick={() => window.petApi.debug('addhearts')} title="누적 하트 +50 · 여러 번 누르면 방꾸미기 배경이 단계별로 바뀜">하트 +50</button>
                       <button onClick={() => window.petApi.debug('heartnext')}>방꾸미기 다음단계</button>
                       <button
                         className="mh__qa-reset"
