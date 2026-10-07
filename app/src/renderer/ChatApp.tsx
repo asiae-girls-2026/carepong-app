@@ -107,14 +107,12 @@ const fmtTime = (t: string): string => {
   if (h === undefined) return t
   return `${String(Number(h)).padStart(2, '0')}:${String(Number(m || 0)).padStart(2, '0')}`
 }
-// 24시간 시:분 선택 — 오전/오후 없이 00~23시 · 분(5분 단위, 기존 값 보존). 기획서: 00:00~24:00 형식
+// 24시간 시:분 선택 — 오전/오후 없이 00~23시 · 분(1분 단위 00~59). 기획서: 00:00~24:00 형식
 const TimeSelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => {
   const [hRaw, mRaw] = (value || '09:00').split(':')
   const h = String(Number(hRaw ?? 9)).padStart(2, '0')
   const m = String(Number(mRaw ?? 0)).padStart(2, '0')
-  const mins = Array.from(
-    new Set([m, ...Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'))]),
-  ).sort()
+  const mins = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'))
   return (
     <span className="mh__timesel">
       <select value={h} onChange={(e) => onChange(`${e.target.value}:${m}`)}>
@@ -827,7 +825,11 @@ export default function ChatApp() {
                                   + 시간
                                 </button>
                               </div>
-                              <button className="mh__gsubmit" onClick={() => submitGui(m.id)}>
+                              <button
+                                className="mh__gsubmit"
+                                disabled={!gName.trim() || gTimes.some((t) => !t)}
+                                onClick={() => submitGui(m.id)}
+                              >
                                 등록
                               </button>
                             </div>

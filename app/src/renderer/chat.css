@@ -337,6 +337,8 @@ body {
   font-size: 12px; font-weight: 800; padding: 8px 0; cursor: pointer;
 }
 .mh__gsubmit:hover { background: #3da97c; }
+.mh__gsubmit:disabled { background: #cdd5d0; color: #f2f5f3; cursor: not-allowed; }
+.mh__gsubmit:disabled:hover { background: #cdd5d0; }
 .mh__chip--on { background: #fdf3dd; border-color: var(--orange); color: #b06a10; }
 
 /* ══ ⚙️ 설정 탭 (미니홈 통합) ══ */
