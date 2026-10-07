@@ -1148,7 +1148,7 @@ export default function App() {
             blink={blink}
             facing={facing}
             stats={pet.stats}
-            bubble={bubble}
+            bubble={reminder || stressAlert ? null : bubble}
             pose={currentPose}
           />
         </div>
