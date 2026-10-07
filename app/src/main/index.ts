@@ -96,7 +96,10 @@ function openChatWindow(mode: 'med' | 'heart' | 'settings' = 'heart'): void {
   chat = new BrowserWindow({
     width: 420,
     height: 640,
-    resizable: false, // 1#10(Q5): 미니홈 창 크기 고정(420×640) — 전체창/과도 확대 방지
+    minWidth: 420, // 1#10(Q5): 가로는 420 고정 · 세로만 자유 리사이즈(사용자 요청)
+    maxWidth: 420,
+    minHeight: 480,
+    resizable: true,
     maximizable: false,
     fullscreenable: false,
     title: '미니홈',

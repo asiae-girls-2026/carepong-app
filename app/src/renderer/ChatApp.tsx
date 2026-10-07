@@ -102,7 +102,31 @@ const clampInt = (v: unknown, lo: number, hi: number): number => {
 const fmtTime = (t: string): string => {
   const [h, m] = (t || '').split(':')
   if (h === undefined) return t
-  return Number(m) ? `${Number(h)}시 ${Number(m)}분` : `${Number(h)}시`
+  return `${String(Number(h)).padStart(2, '0')}:${String(Number(m || 0)).padStart(2, '0')}`
+}
+// 24시간 시:분 선택 — 오전/오후 없이 00~23시 · 분(5분 단위, 기존 값 보존). 기획서: 00:00~24:00 형식
+const TimeSelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => {
+  const [hRaw, mRaw] = (value || '09:00').split(':')
+  const h = String(Number(hRaw ?? 9)).padStart(2, '0')
+  const m = String(Number(mRaw ?? 0)).padStart(2, '0')
+  const mins = Array.from(
+    new Set([m, ...Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'))]),
+  ).sort()
+  return (
+    <span className="mh__timesel">
+      <select value={h} onChange={(e) => onChange(`${e.target.value}:${m}`)}>
+        {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map((hh) => (
+          <option key={hh} value={hh}>{hh}</option>
+        ))}
+      </select>
+      <span className="mh__timesel-colon">:</span>
+      <select value={m} onChange={(e) => onChange(`${h}:${e.target.value}`)}>
+        {mins.map((mm) => (
+          <option key={mm} value={mm}>{mm}</option>
+        ))}
+      </select>
+    </span>
+  )
 }
 // QA 전용 테스트 버튼 노출 플래그 — 최종 공개 배포 전에는 false로 바꾸고 빌드하세요(일반 사용자에게 숨김).
 const QA_MODE = true
@@ -658,6 +682,11 @@ export default function ChatApp() {
           </div>
         )}
 
+        {/* 1분 쉬어가기 — 오늘의 하트 바로 아래(상시 노출) */}
+        <div className="mh__relief-cta">
+          <button className="mh__chip" onClick={() => window.careApi.openRelief()}>🫧 1분 쉬어가기</button>
+        </div>
+
         <div className="mh__body">
           <div className="mh__content">
             {unlockMsg && <div className="mh__unlock" role="status">{unlockMsg}</div>}
@@ -721,12 +750,6 @@ export default function ChatApp() {
                   </div>
                 </div>
                 )}
-                {(mood || moodDoneToday) && (
-                  <div className="mh__mood-today">오늘 기분 {mood ?? diary[dayKeyOf(Date.now())]?.mood} 골랐어요 · 내일 또 만나요 😊</div>
-                )}
-                <div className="mh__chips">
-                  <button className="mh__chip" onClick={() => window.careApi.openRelief()}>🫧 1분 쉬어가기</button>
-                </div>
               </>
             )}
 
@@ -779,11 +802,10 @@ export default function ChatApp() {
                               <div className="mh__gtimes">
                                 {gTimes.map((t, i) => (
                                   <span key={i} className="mh__gtime">
-                                    <input
-                                      type="time"
+                                    <TimeSelect
                                       value={t}
-                                      onChange={(e) =>
-                                        setGTimes((prev) => prev.map((x, idx) => (idx === i ? e.target.value : x)))
+                                      onChange={(v) =>
+                                        setGTimes((prev) => prev.map((x, idx) => (idx === i ? v : x)))
                                       }
                                     />
                                     {gTimes.length > 1 && (
@@ -959,13 +981,13 @@ export default function ChatApp() {
                     <>
                       <label className="mh__row">
                         시작 시간
-                        <input type="time" value={config.quietHours.start}
-                          onChange={(e) => persist({ ...config, quietHours: { ...config.quietHours, start: e.target.value } })} />
+                        <TimeSelect value={config.quietHours.start}
+                          onChange={(v) => persist({ ...config, quietHours: { ...config.quietHours, start: v } })} />
                       </label>
                       <label className="mh__row">
                         끝나는 시간
-                        <input type="time" value={config.quietHours.end}
-                          onChange={(e) => persist({ ...config, quietHours: { ...config.quietHours, end: e.target.value } })} />
+                        <TimeSelect value={config.quietHours.end}
+                          onChange={(v) => persist({ ...config, quietHours: { ...config.quietHours, end: v } })} />
                       </label>
                     </>
                   )}
@@ -1026,10 +1048,9 @@ export default function ChatApp() {
                     <div className="mh__gtimes">
                       {sTimes.map((t, i) => (
                         <span key={i} className="mh__gtime">
-                          <input
-                            type="time"
+                          <TimeSelect
                             value={t}
-                            onChange={(e) => setSTimes((prev) => prev.map((x, idx) => (idx === i ? e.target.value : x)))}
+                            onChange={(v) => setSTimes((prev) => prev.map((x, idx) => (idx === i ? v : x)))}
                           />
                           {sTimes.length > 1 && (
                             <button onClick={() => setSTimes((prev) => prev.filter((_, idx) => idx !== i))}>−</button>
@@ -1088,6 +1109,8 @@ export default function ChatApp() {
                       <button onClick={() => window.petApi.debug('gauge0')}>게이지 0</button>
                       <button onClick={() => window.petApi.debug('levelup')}>레벨업</button>
                       <button onClick={() => { window.petApi.debug('heartreset'); setLocalHearts(0) }}>하트 초기화</button>
+                      <button onClick={() => window.petApi.debug('addhearts')} title="누적 하트 +50 · 여러 번 누르면 방꾸미기 배경이 단계별로 바뀜">하트 +50</button>
+                      <button onClick={() => window.petApi.debug('heartnext')}>방꾸미기 다음단계</button>
                       <button
                         className="mh__qa-reset"
                         title="검정 고양이 Lv.1 · 1세대부터 완전히 처음 상태로 (이름 유지)"

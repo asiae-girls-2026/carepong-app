@@ -114,10 +114,11 @@ function rollReliefDay(log: IntakeLog, now: number): IntakeLog {
   return { ...log, reliefDay: day, reliefCount: 0 }
 }
 // 지금 완화 보상을 줄 수 있나 (오늘 3회 미만 AND 마지막 보상에서 30분 경과). 공감챗봇은 미포함.
-export function canGrantRelief(log: IntakeLog, now: number): boolean {
+export function canGrantRelief(log: IntakeLog, now: number, ignoreCooldown = false): boolean {
   const r = rollReliefDay(log, now)
   if ((r.reliefCount ?? 0) >= RELIEF_DAILY_CAP) return false
-  if (r.lastReliefRewardAt && now - r.lastReliefRewardAt < RELIEF_COOLDOWN_MS) return false
+  // QA 모드에선 30분 쿨다운을 건너뛰어 하루 3회 보상을 연속 테스트 가능(하루 3회 상한은 유지)
+  if (!ignoreCooldown && r.lastReliefRewardAt && now - r.lastReliefRewardAt < RELIEF_COOLDOWN_MS) return false
   return true
 }
 export function grantRelief(log: IntakeLog, now: number): IntakeLog {

@@ -59,6 +59,8 @@ const WALK_SPEED = 3.0
 const IDLE_RANGE = 55
 const WALK_DURATION_MS = 10_000
 const SAVE_INTERVAL_MS = 15_000
+// QA 전용 동작 플래그 — 최종 공개 배포 전엔 false로(완화 쿨다운 정상 적용). ChatApp의 QA_MODE와 같이 맞추세요.
+const QA_MODE = true
 const CHEW_MS = 1000
 const EAT_ANIM_MS = 2200 // 밥 포즈 5컷 재생 길이(연출용 · 게이지 로직과 별개)
 const PAT_ANIM_MS = 1300 // 쓰다듬 포즈 3컷(pat_1→pat_2→face_happy)
@@ -756,7 +758,7 @@ export default function App() {
     closeRelief()
     const now = Date.now()
     // 완화 보상: 심호흡+명상 합산 하루 3회 · 쿨다운 30분(기획서 3-1·3-2). 초과 시 완화는 되지만 보상 없음
-    const grant = canGrantRelief(intakeRef.current, now)
+    const grant = canGrantRelief(intakeRef.current, now, QA_MODE) // QA: 쿨다운 건너뜀(하루 3회 상한은 유지)
     if (grant) {
       intakeRef.current = grantRelief(intakeRef.current, now)
       window.petApi.saveIntake(intakeRef.current)
@@ -858,6 +860,11 @@ export default function App() {
   const doCare = (kind: CareKind): void => {
     const p = petRef.current
     if (!p) return
+    // 방해금지(수동·야간) 중엔 밥·쓰다듬기·산책 모두 불가 — 쉬는 중(기획서 반영)
+    if (isResting(Date.now())) {
+      showBubble('지금은 쉬는 중이에요 😴 방해금지를 끄면 같이 놀 수 있어요', 3000)
+      return
+    }
     if (kind === 'walk') {
       // 기획서 v7 4.돌봄 E7: 기력<20 → 산책 거부(walk_refused), 소모·보상 없음
       if (p.stats.energy < WALK_REFUSE_ENERGY) {
@@ -984,9 +991,20 @@ export default function App() {
           const dayKey = Math.floor(Date.now() / 86400000)
           return { ...prev, chatsDay: dayKey, chatsToday: 0 }
         }
+        if (action === 'addhearts') {
+          // QA: 누적 하트 +50 — 방꾸미기 배경 단계 테스트용(하트 수에 맞춰 방 배경이 바뀜)
+          return { ...prev, lifetime: { ...prev.lifetime, chats: (prev.lifetime.chats ?? 0) + 50 } }
+        }
         if (action === 'resetfirst') {
           // 완전 초기화: 1세대 검정 고양이 Lv.1 · 게이지 70 · 누적기록/방꾸미기/도감까지 전부 리셋(이름 유지)
           return createNewPet(prev.name, 'cat', Date.now())
+        }
+        if (action === 'heartnext') {
+          // QA 방꾸미기 테스트 — 누적 하트를 다음 해금 단계로 점프
+          const thresholds = [10, 30, 60, 100, 150, 210, 280, 340, 400]
+          const cur = prev.lifetime.chats ?? 0
+          const next = thresholds.find((t) => t > cur) ?? 400
+          return { ...prev, lifetime: { ...prev.lifetime, chats: next } }
         }
         if (action === 'sad') return { ...prev, stats: { ...prev.stats, happiness: 20 } }
         if (action === 'heal') return { ...prev, stats: { health: 100, happiness: 100, energy: 100 } }

@@ -34,8 +34,8 @@ export function listHybrids(): string[] {
 }
 
 // 성장단계별 표시 크기(px). 눈(얼굴) 크기를 단계 간 일정하게 유지하도록 산출(몸만 커짐).
-export function petPixelSize(stage: number): number {
-  return [0, 84, 95, 112, 112, 126][stage] ?? 112 // 위젯 펫 크기(살짝 키움)
+export function petPixelSize(_stage: number): number {
+  return 126 // 위젯 펫 크기 — 전 레벨(1~4)을 Lv.5 크기로 통일(사용자 요청)
 }
 
 // ── 포즈 시스템 (pets/<creature>/<level>/<pose>.png) ──
