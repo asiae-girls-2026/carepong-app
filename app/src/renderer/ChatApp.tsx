@@ -561,22 +561,8 @@ export default function ChatApp() {
         <div className="mh__room">
           {/* 방꾸미기 — 누적 하트 단계별 전체 방 배경 이미지 (0=빈방) */}
           {roomBg && <img className="mh__room-bg" src={roomBg} alt="" draggable={false} />}
-          {/* 먼저 살던 아이들 — 환생해도 집에 작게 남는다 */}
-          {normalizeAncestors(pet?.ancestors).slice(-2).map((a, i) => {
-            const url = poseUrl(a.creature, 5, 'idle') ?? spriteUrl(a.creature, 5)
-            return url ? (
-              <img
-                key={`${a.creature}-${i}`}
-                className={`mh__ancestor mh__ancestor--${i}`}
-                src={url}
-                alt={a.name}
-                title={`${a.name} — 먼저 살던 아이예요`}
-                draggable={false}
-              />
-            ) : null
-          })}
+          {/* 이전 펫은 방에 표시하지 않음 — 펫 도감에서 수집(기획서 7번) */}
           <div className="mh__petspot">
-            <span className={`mh__rug${lifetimeChats >= 100 ? ' mh__rug--deluxe' : ''}`} />
             {petImg ? (
               <img className="mh__pet" src={petImg} alt={petName} draggable={false} />
             ) : (

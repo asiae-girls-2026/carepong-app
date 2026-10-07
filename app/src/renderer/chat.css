@@ -73,7 +73,7 @@ body {
   position: absolute; inset: 0; width: 100%; height: 100%;
   object-fit: cover; image-rendering: auto; z-index: 0;
 }
-.mh__room > *:not(.mh__room-bg) { position: relative; z-index: 1; } /* 펫·문패 등은 배경 위 */
+.mh__room > *:not(.mh__room-bg) { z-index: 1; } /* 펫·문패 등은 배경 위 (각자 position:absolute 유지) */
 .mh__room {
   flex: none; position: relative; height: 138px;
   border: 2px solid #b9cee8; border-radius: 9px 9px 0 0;
@@ -111,13 +111,7 @@ body {
 
 /* 펫 자리 (러그 + 그림자) */
 .mh__petspot { position: absolute; bottom: 8px; left: 50%; transform: translateX(-72%); }
-.mh__rug {
-  position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
-  width: 84px; height: 18px; border-radius: 50%;
-  background: var(--peach-soft); opacity: 0.9;
-  box-shadow: inset 0 0 0 3px rgba(255, 138, 122, 0.35);
-}
-.mh--med .mh__rug { background: var(--mint-soft); box-shadow: inset 0 0 0 3px rgba(79, 196, 147, 0.3); }
+/* (러그 제거: 인테리어는 배경 이미지에 포함 — 60하트 러그 배경으로 처리) */
 .mh__pet {
   position: relative; width: 72px; height: 72px; object-fit: contain;
   image-rendering: pixelated;
@@ -388,15 +382,6 @@ body {
 .mh__guiform--inmsg { margin-top: 9px; background: #fff; border: 1.5px solid #ecdfc6; border-radius: 10px; padding: 9px; }
 
 /* 먼저 살던 아이들 — 환생 후에도 미니홈에 작게 남는다 */
-.mh__ancestor {
-  position: absolute;
-  width: 34px; height: 34px; object-fit: contain;
-  image-rendering: pixelated;
-  opacity: 0.95;
-  animation: hostBob 3.2s ease-in-out infinite;
-}
-.mh__ancestor--0 { bottom: 42px; left: 34px; } /* 침대 위에서 쉬는 중 */
-.mh__ancestor--1 { bottom: 26px; right: 78px; animation-delay: 1.1s; } /* 소파 옆 */
 
 /* 상태 바 스트립 — 행복·건강·기력·XP 상시 표시 */
 .mh__stats {
@@ -546,15 +531,6 @@ body {
   width: 14px; height: 4px; background: #8a6f5c; border-radius: 2px;
 }
 .mh__unlock-bird { position: absolute; top: 30px; left: 40px; font-size: 12px; animation: hostBob 2.8s ease-in-out infinite; }
-.mh__rug--deluxe {
-  width: 96px; height: 20px;
-  background: repeating-linear-gradient(90deg, #ffd9d1 0 10px, #ffe9c9 10px 20px);
-  box-shadow: inset 0 0 0 3px rgba(217, 149, 138, 0.5);
-}
-.mh--med .mh__rug--deluxe {
-  background: repeating-linear-gradient(90deg, #d8f0e2 0 10px, #eaf6d9 10px 20px);
-  box-shadow: inset 0 0 0 3px rgba(143, 201, 171, 0.55);
-}
 
 /* 📔 아카이브 — 역대 펫 + 마음 일기장 */
 .mh__tab--arc.on { background: #d9a441; border-color: #b8862e; color: #fff; }
