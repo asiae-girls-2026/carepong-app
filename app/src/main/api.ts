@@ -31,7 +31,7 @@ const uid = (): string => crypto.randomUUID()
 const nowISO = (): string => new Date().toISOString() // 서버가 KST 로 해석. 앱 시계 그대로
 
 export interface WindowResult {
-  stress_score: number // 1차 용어 통일: 서버 WindowOut 의 점수 필드 (구 condition_score)
+  condition_score: number | null // 서버 WindowOut 필드명 그대로. 활동 0 창·모델 실패 시 null (10/7 용어: condition_score 로 통일)
   level: number
   prompt: boolean
   prompt_type: 'morning' | 'spike' | 'random' | null
@@ -118,7 +118,7 @@ export async function init({
 }
 
 /** 1분 창 집계 끝날 때마다. features = 수집기(collector.exe) stdout 의 features 그대로 (16개, 활동 0 창도 보냄)
- *  반환 {stress_score, level, prompt, prompt_type, window_id} — prompt 가 true 면 P03 팝업 */
+ *  반환 {condition_score, level, prompt, prompt_type, window_id} — prompt 가 true 면 P03 팝업 */
 export async function postWindow({
   windowId = uid(),
   sessionId,

@@ -60,6 +60,12 @@
         "zip"
       ],
       "identity": null
-    }
+    },
+    "extraResources": [
+      {
+        "from": "resources/collector.exe",
+        "to": "collector.exe"
+      }
+    ]
   }
 }

@@ -5,6 +5,8 @@ import { BrowserWindow, ipcMain } from 'electron'
 import crypto from 'node:crypto'
 import { createStressTracker, STRESS_THRESHOLD, type StressSnapshot } from '../core/stress'
 import * as api from './api'
+import { scheduleCollector, setCollectorPaused, type CollectorLine } from './collector'
+import { loadHealth } from './store'
 
 export type StressEvent =
   | { type: 'key'; backspace: boolean }
@@ -117,16 +119,23 @@ export function initStressManager(): void {
     rollDay()
     if (r.prompt && canIntervene(now)) {
       fireAlert(now, {
-        score: r.stress_score,
+        score: r.condition_score ?? 0,
         markers: { kpm: 0, backspaceRatio: 0, mouseJerk: 0, clickRate: 0 },
         demo: false,
         windowId: r.window_id,
         promptType: r.prompt_type ?? 'spike',
-        stressScore: r.stress_score,
+        stressScore: r.condition_score ?? undefined,
       })
     }
   }
   ipcMain.on('collector:window', (_e, w: CollectorWindow) => void onServerWindow(w))
+
+  // ── (10/7) 수집기 실행: collector.exe stdout 1줄 → onServerWindow. 08:30~18:30(방해금지 밖)만, 설정 1분마다 반영 ──
+  ipcMain.on('collector:pause', (_e, on: boolean) => setCollectorPaused(on)) // 방해금지 수동 토글·수집 일시중지
+  scheduleCollector(
+    () => loadHealth(),
+    (line: CollectorLine) => void onServerWindow({ windowStart: line.window_start, features: line.features, dnd: false }),
+  )
 
   // ── 개발용 오프라인 데모: 수집기·서버 없이 로컬 임계로 팝업 (CAREPONG_DEV_SIM=1 일 때만) ──
   // ⚠ 실제 판정 아님 — 데모·UI 확인용. 운영에선 끄고 collector:window 경로만 쓴다.
