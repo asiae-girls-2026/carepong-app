@@ -7,7 +7,7 @@ import { decayDropsBetween } from './petEngine'
 import { animationStateFor } from './animation'
 import { isPointInRect, clampToBounds } from './geometry'
 import { createNewPet, type Pet as PetModel } from '../core/types'
-import { addXp, rebirth, MAX_XP, isMaxed } from '../core/progression'
+import { addXp, rebirth, MAX_XP, isMaxed, XP_CUMULATIVE, REBIRTH_XP, MAX_LEVEL } from '../core/progression'
 import { applyCare, type CareKind } from '../core/care'
 import {
   DECAY_HOURS,
@@ -20,7 +20,6 @@ import {
   ALARM_REST,
   RELIEF_BREATH,
   RELIEF_MEDITATE,
-  NIGHT_ENERGY_REGEN,
   REMINDER_CHECK_MS,
   ENERGY_OVERLOAD_AT,
   ENERGY_OVERLOAD_SUSTAIN_MS,
@@ -37,6 +36,8 @@ import {
   recordMiss,
   canGrantXp,
   grantXp,
+  canGrantRelief,
+  grantRelief,
   recordFeed,
   isFull,
   type XpPart,
@@ -153,6 +154,7 @@ export default function App() {
   const [blink, setBlink] = useState(false)
   const [reminder, setReminder] = useState<Reminder | null>(null)
   const [manualDnd, setManualDnd] = useState(false)
+  const [autoNight, setAutoNight] = useState(false) // 자동 방해금지(야간) 배지·말풍선용(7#3·7#4)
   const [naming, setNaming] = useState(false)
   const [nameInput, setNameInput] = useState('')
   const [levelUp, setLevelUp] = useState(0)
@@ -160,6 +162,7 @@ export default function App() {
   const [rebirthPrompt, setRebirthPrompt] = useState(false)
   const [stressAlert, setStressAlert] = useState(false)
   const [reliefOpen, setReliefOpen] = useState(false)
+  const [reliefRoute1, setReliefRoute1] = useState(false) // Route1(감지 팝업)=1~5 선택+대화 선택지, Route2=2선택
   const [petOpacity, setPetOpacity] = useState(40) // 케어펫 투명도 %(방해금지 중) — 설정 연동
 
   const lastTickAt = useRef<number>(Date.now())
@@ -191,6 +194,7 @@ export default function App() {
   const reminderAutoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const snoozeRef = useRef<Record<string, number>>({})
   const manualDndRef = useRef(false)
+  const autoNightRef = useRef<boolean | null>(null) // 야간 방해금지 진입/해제 감지(최초 null=부팅 시 말풍선 억제)
   const sleepNudgedRef = useRef(0)
   const namingRef = useRef(false)
   const rebirthRef = useRef(false)
@@ -304,8 +308,10 @@ export default function App() {
       }
       return settle(addXp(rewarded, grant ? reward.xp : 0))
     })
+    const wasMed = r.kind === 'medication'
     clearReminder()
     showGauge()
+    if (wasMed) setTimeout(scanDue, 150) // 2#13: 같은 시각 다음 약 바로 노출(텀 제거)
   }
   const snoozeReminder = (): void => {
     const r = reminderRef.current
@@ -368,8 +374,8 @@ export default function App() {
         const now = Date.now()
         let next = prev
         if (isResting(now)) {
-          // 방해금지(밤) 중엔 자연 감소 없음, 기력만 회복
-          next = { ...next, stats: applyReward(next.stats, { energy: NIGHT_ENERGY_REGEN }) }
+          // 방해금지(밤) 중엔 자연 감소·자동 회복 모두 없음 — 회복은 밥·약·물·휴식·완화로만(기획서 11·12, Q4 자동회복 제거)
+          // next = prev 유지(게이지 변화 없음)
         } else {
           // 하루 3회(11·14·17시) 고정 드롭 — 지난 틱 이후 지나온 감소 시각 수만큼 −16/−12/−20
           const drops = decayDropsBetween(lastTickAt.current, now, DECAY_HOURS)
@@ -389,6 +395,29 @@ export default function App() {
       })
     }, TICK_INTERVAL_MS)
     return () => clearInterval(id)
+  }, [])
+
+  // ── 자동 방해금지(야간 18:30~08:30) 진입/해제 고지 — 말풍선 1회 + 배지(7#3·7#4) ──
+  useEffect(() => {
+    const check = (): void => {
+      const n = isNight(Date.now())
+      if (autoNightRef.current === null) {
+        autoNightRef.current = n // 부팅 시 현재 상태만 반영(말풍선 없이)
+        setAutoNight(n)
+        return
+      }
+      if (n !== autoNightRef.current) {
+        autoNightRef.current = n
+        setAutoNight(n)
+        if (configRef.current.quietEnabled !== false && !manualDndRef.current) {
+          showBubble(n ? '방해금지가 켜졌어요 😴 (야간 — 알람·개입 잠시 멈춤)' : '방해금지가 해제됐어요 🙆 좋은 아침이에요!', 4000)
+        }
+      }
+    }
+    check()
+    const id = setInterval(check, 30_000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -495,38 +524,42 @@ export default function App() {
     showBubble(`반가워요! 저는 ${nm}이에요 🐣 서로 잘 돌봐줘요, 우리`, 5000)
   }
 
-  // ── 알람 도래 점검 (30초) ──
+  // ── 알람 표시 + 도래 점검 ──
+  const presentReminder = (d: { kind: ReminderKind; id: string; label: string }, now: number): void => {
+    const r: Reminder = { ...d, alarmId: crypto.randomUUID(), shownAt: new Date(now).toISOString() }
+    reminderRef.current = r
+    setReminder(r)
+    log('alarm_shown', 'P02', { kind: ALARM_EVENT_KIND[r.kind], ...alarmProps(r) })
+    window.petApi.notify('케어퐁', REMINDER_UI[r.kind].text(r.label))
+    // 약 알람만 즉시 클릭을 잡는다 — 물·스트레칭·휴식은 말풍선에 마우스를 올렸을 때만 버튼이 눌린다
+    if (r.kind === 'medication') {
+      interactive.current = true
+      window.petApi.setClickThrough(false)
+    }
+    if (reminderAutoTimer.current) clearTimeout(reminderAutoTimer.current)
+    reminderAutoTimer.current = setTimeout(missReminder, REMINDER_AUTO_MS)
+  }
+  const scanDue = (): void => {
+    if (reminderRef.current || namingRef.current || rebirthRef.current) return
+    if (stressAlertRef.current || reliefOpenRef.current) return
+    if (!petRef.current) return
+    window.petApi.loadConfig().then((cfg) => {
+      configRef.current = cfg
+      if (reminderRef.current) return
+      const now = Date.now()
+      if (isResting(now)) return
+      const due = dueReminders(cfg, intakeRef.current, now, sessionStart.current).filter(
+        (d) => (snoozeRef.current[d.id] ?? 0) < now,
+      )
+      if (due.length === 0) return
+      presentReminder(due[0], now)
+    })
+  }
+  // 30초 주기 점검 — 약 확인 직후엔 confirmReminder에서 즉시 scanDue 재호출(2#13: 같은 시각 다음 약 바로 노출)
   useEffect(() => {
-    const id = setInterval(() => {
-      if (reminderRef.current || namingRef.current || rebirthRef.current) return
-      if (stressAlertRef.current || reliefOpenRef.current) return
-      const p = petRef.current
-      if (!p) return
-      window.petApi.loadConfig().then((cfg) => {
-        configRef.current = cfg
-        if (reminderRef.current) return
-        const now = Date.now()
-        if (isResting(now)) return
-        const due = dueReminders(cfg, intakeRef.current, now, sessionStart.current).filter(
-          (d) => (snoozeRef.current[d.id] ?? 0) < now,
-        )
-        if (due.length === 0) return
-        const r: Reminder = { ...due[0], alarmId: crypto.randomUUID(), shownAt: new Date(now).toISOString() }
-        reminderRef.current = r
-        setReminder(r)
-        log('alarm_shown', 'P02', { kind: ALARM_EVENT_KIND[r.kind], ...alarmProps(r) })
-        window.petApi.notify('케어퐁', REMINDER_UI[r.kind].text(r.label))
-        // 약 알람만 즉시 클릭을 잡는다(중요) — 물·스트레칭·휴식은 하던 일 방해 없이,
-        // 말풍선에 마우스를 올렸을 때만 버튼이 눌리게 둔다
-        if (r.kind === 'medication') {
-          interactive.current = true
-          window.petApi.setClickThrough(false)
-        }
-        if (reminderAutoTimer.current) clearTimeout(reminderAutoTimer.current)
-        reminderAutoTimer.current = setTimeout(missReminder, REMINDER_AUTO_MS)
-      })
-    }, REMINDER_CHECK_MS)
+    const id = setInterval(scanDue, REMINDER_CHECK_MS)
     return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // ── 자율 걷기 (앵커 주변 소폭 / 산책 시 전체 화면) ──
@@ -671,6 +704,7 @@ export default function App() {
     // 진입 경로 판별은 응답 전에 (answerStressPrompt 가 promptCtx 를 비움)
     reliefEntryRef.current = promptCtxRef.current ? 'stress_prompt' : 'mind_tab'
     reliefWindowIdRef.current = promptCtxRef.current?.windowId ?? null
+    setReliefRoute1(!!promptCtxRef.current) // Route1만 1~5 선택·대화 선택지 노출
     answerStressPrompt(1, 'answered') // "예" (Route2·메뉴 진입이면 promptCtx 없어 no-op)
     stressAlertRef.current = false
     setStressAlert(false)
@@ -691,6 +725,17 @@ export default function App() {
       report_id: null,
     })
   }
+  // Route1 1~5 자가보고 — 데이터 수집용 기록만(완화 흐름엔 영향 없음) · 기획서 3-2
+  const reportStressScale = (scale: number): void => {
+    log('stress_scale', 'P03', { scale, window_id: reliefWindowIdRef.current })
+  }
+  // 완화 3번째: {펫이름}과 얘기하기 — 공감챗봇 열기. 보상 없음(하트만)·상한/쿨다운 미포함(기획서 3-2)
+  const chatRelief = (): void => {
+    log('relief_selected', 'P04', { type: 'chat', entry: reliefEntryRef.current, window_id: reliefWindowIdRef.current, report_id: null })
+    reliefSelectedRef.current = null // 챗봇은 완료/중단 개념 없음 — abandoned 기록 방지
+    closeRelief()
+    window.careApi.openChat('heart')
+  }
   const closeRelief = (): void => {
     // 선택 후 완료 전 닫음 → 중단(abandoned) 기록 (호출위치표 D)
     if (reliefSelectedRef.current) {
@@ -707,19 +752,28 @@ export default function App() {
     const dur_ms = reliefStartRef.current ? Date.now() - reliefStartRef.current : null
     log('relief_completed', 'P04', { type: kind, dur_ms })
     reliefSelectedRef.current = null // 완료 → 중단 아님
-    window.careApi.calm()
+    window.careApi.calm() // 지수 완화는 상한과 무관하게 항상
     closeRelief()
+    const now = Date.now()
+    // 완화 보상: 심호흡+명상 합산 하루 3회 · 쿨다운 30분(기획서 3-1·3-2). 초과 시 완화는 되지만 보상 없음
+    const grant = canGrantRelief(intakeRef.current, now)
+    if (grant) {
+      intakeRef.current = grantRelief(intakeRef.current, now)
+      window.petApi.saveIntake(intakeRef.current)
+    }
     const reward = kind === 'breath' ? RELIEF_BREATH : RELIEF_MEDITATE
     setPet((prev) => {
       if (!prev) return prev
-      const rewarded: PetModel = {
-        ...prev,
-        stats: applyReward(prev.stats, reward),
-        lifetime: { ...prev.lifetime, reliefs: prev.lifetime.reliefs + 1 },
-      }
-      return settle(addXp(rewarded, reward.xp))
+      const base: PetModel = { ...prev, lifetime: { ...prev.lifetime, reliefs: prev.lifetime.reliefs + 1 } }
+      if (!grant) return base
+      return settle(addXp({ ...base, stats: applyReward(prev.stats, reward) }, reward.xp))
     })
-    showBubble('잘하셨어요! 스트레스 지수가 쭉 내려갔어요 💛', 5000)
+    showBubble(
+      grant
+        ? '잘하셨어요! 스트레스 지수가 쭉 내려갔어요 💛'
+        : '잘하셨어요! 오늘 완화 보상은 다 챙겼지만, 쉬어가는 건 언제나 좋아요 💛',
+      5000,
+    )
   }
 
   // 지수 게이지는 노출하지 않는다 — 스트레스가 감지되면 완화 제안 프롬프트로만 표시(기획 결정)
@@ -831,7 +885,8 @@ export default function App() {
     if (kind === 'feed') {
       // 기획서 v10: 최근 1시간 내 3회 먹으면 배부름 → 거부(게이지·XP·보상 없음)
       const now = Date.now()
-      if (isFull(intakeRef.current, now)) {
+      // 기획서 v10: 최근 1시간 3회 → 배부름(거부). 단 기력<40이면 배부름이어도 허용 — 기력 회복 경로 보장(Q1-B-1, 교착 방지)
+      if (isFull(intakeRef.current, now) && (petRef.current?.stats.energy ?? 100) >= 40) {
         showBubble('배가 너무 불러요~ 조금 쉬었다 먹을게요! 🐱', 3000)
         return
       }
@@ -917,11 +972,24 @@ export default function App() {
         }
         if (action === 'xp100') return settle(addXp(prev, 100))
         if (action === 'maxout') return settle(addXp(prev, MAX_XP))
+        // ── 채원님 QA 테스트 버튼 ──
+        if (action === 'gauge0') return { ...prev, stats: { health: 0, happiness: 0, energy: 0 } } // 게이지 0 (시무룩/지침 확인)
+        if (action === 'levelup') {
+          // 현재 레벨 XP 가득 → 다음 레벨. Lv.5면 환생(6,750)까지 채움
+          const target = prev.stage >= MAX_LEVEL ? REBIRTH_XP : ((XP_CUMULATIVE as readonly number[])[prev.stage] ?? REBIRTH_XP)
+          return settle(addXp(prev, target - prev.xp))
+        }
+        if (action === 'heartreset') {
+          // 오늘의 하트만 0으로. 누적 하트(lifetime.chats=방꾸미기)는 유지
+          const dayKey = Math.floor(Date.now() / 86400000)
+          return { ...prev, chatsDay: dayKey, chatsToday: 0 }
+        }
         if (action === 'sad') return { ...prev, stats: { ...prev.stats, happiness: 20 } }
         if (action === 'heal') return { ...prev, stats: { health: 100, happiness: 100, energy: 100 } }
         return prev
       })
       if (action === 'rebirth') doRebirth()
+      setTimeout(saveNow, 0) // QA/디버그 변경 즉시 저장 — 미니홈(2초 폴링) 반영
     })
     return off
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -954,9 +1022,19 @@ export default function App() {
     poseNow,
   )
 
+  // 말풍선 화면 경계 보정(1#7) — 상단이면 아래로, 좌우 모서리면 안쪽 정렬
+  const bubbleCls = ((): string => {
+    const cx = position.x + petSize / 2
+    const cls: string[] = []
+    if (position.y < 150) cls.push('pet__bubble--below')
+    if (cx < 120) cls.push('pet__bubble--pinleft')
+    else if (cx > window.innerWidth - 120) cls.push('pet__bubble--pinright')
+    return cls.join(' ')
+  })()
+
   return (
     <div className="overlay">
-      {manualDnd && <div className="dnd-badge">🔕 방해금지 (쉬는 중)</div>}
+      {(manualDnd || autoNight) && <div className="dnd-badge">🔕 방해금지 (쉬는 중)</div>}
       {!hidden && (
         <div
           style={{
@@ -1036,6 +1114,7 @@ export default function App() {
             </div>
           )}
           <Pet
+            bubbleClass={bubbleCls}
             creature={pet.creature}
             stage={pet.stage}
             generation={pet.generation}
@@ -1118,6 +1197,10 @@ export default function App() {
           onComplete={completeRelief}
           onClose={closeRelief}
           onSelect={selectRelief}
+          askScale={reliefRoute1}
+          showChat={reliefRoute1}
+          onScale={reportStressScale}
+          onChat={chatRelief}
         />
       )}
     </div>

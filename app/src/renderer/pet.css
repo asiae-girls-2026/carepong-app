@@ -386,3 +386,19 @@ body { background: transparent; overflow: hidden; user-select: none; }
   overflow: hidden; margin: 10px 0 6px;
 }
 .meditate__progress span { display: block; height: 100%; border-radius: 4px; background: #b9aee8; transition: width 1s linear; }
+
+/* 완화 Route1 — 1~5 정도 선택 (기획서 3-2) */
+.relief__scale { display: flex; gap: 8px; justify-content: center; margin: 6px 0 14px; }
+.relief__scale button {
+  width: 46px; height: 46px; border-radius: 12px; border: 1px solid #d8d2f2;
+  background: #faf9ff; color: #3b3654; font-size: 17px; font-weight: 800; cursor: pointer;
+  transition: transform .12s, border-color .12s, background .12s;
+}
+.relief__scale button:hover { border-color: #b9aee8; background: #f1eeff; transform: translateY(-2px); }
+
+/* 말풍선 화면 경계 보정(1#7) */
+.pet__bubble--below { top: 100%; bottom: auto; margin-top: 8px; margin-bottom: 0; }
+.pet__bubble--below::after { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: #ffffff; }
+.pet__bubble--pinleft { left: 0; transform: translateX(0); }
+.pet__bubble--pinright { left: auto; right: 0; transform: translateX(0); }
+.pet__bubble--pinleft::after, .pet__bubble--pinright::after { display: none; }

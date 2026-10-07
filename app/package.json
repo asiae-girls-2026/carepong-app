@@ -1,7 +1,7 @@
 {
   "name": "care-pong",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
@@ -47,19 +47,21 @@
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": true,
       "perMachine": false,
-      "deleteAppDataOnUninstall": false,
+      "deleteAppDataOnUninstall": true,
       "artifactName": "${productName}-Setup-win-${version}.${ext}"
     },
     "mac": {
       "target": [
         "zip"
       ],
-      "identity": null
+      "identity": null,
+      "icon": "build/icon.png"
     },
     "extraResources": [
       {

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, screen, Menu, Notification, Tray, nativeImage } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, Menu, Notification, Tray, nativeImage, dialog } from 'electron'
 import { join } from 'path'
 import {
   loadState,
@@ -87,6 +87,8 @@ function createTray(): void {
 
 function openChatWindow(mode: 'med' | 'heart' | 'settings' = 'heart'): void {
   if (chat && !chat.isDestroyed()) {
+    if (chat.isMinimized()) chat.restore() // 1#12①: 최소화 후 재클릭 복구
+    chat.show()
     chat.focus()
     chat.webContents.send('chat:setMode', mode)
     return
@@ -94,6 +96,9 @@ function openChatWindow(mode: 'med' | 'heart' | 'settings' = 'heart'): void {
   chat = new BrowserWindow({
     width: 420,
     height: 640,
+    resizable: false, // 1#10(Q5): 미니홈 창 크기 고정(420×640) — 전체창/과도 확대 방지
+    maximizable: false,
+    fullscreenable: false,
     title: '미니홈',
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
@@ -198,6 +203,22 @@ ipcMain.on('care:relief', () => win?.webContents.send('pet:menuCommand', 'relief
 
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
+// 중복 실행 방지(1#8) — 두 번째 실행은 종료하고 기존 창을 앞으로 가져온다
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+}
+app.on('second-instance', () => {
+  if (win && !win.isDestroyed()) {
+    win.show()
+    win.focus()
+  }
+  if (chat && !chat.isDestroyed()) {
+    if (chat.isMinimized()) chat.restore()
+    chat.show()
+    chat.focus()
+  }
+})
+
 app.whenReady().then(async () => {
   createWindow()
   createTray()
@@ -206,6 +227,21 @@ app.whenReady().then(async () => {
 
   // ── 서버 전송 모듈 초기화 (호출위치표 A) — CP 번호는 앱이 로컬 발급한 회원번호 ──
   const health = loadHealth()
+  // 첫 실행 수집 안내(1#2) — 프라이버시 고지 1회
+  if (!health.noticeShown) {
+    void dialog.showMessageBox({
+      type: 'info',
+      title: '케어퐁 — 데이터 수집 안내',
+      message: '케어퐁은 스트레스 감지를 위해 키보드·마우스 사용 패턴만 분석해요.',
+      detail:
+        '· 실제 입력한 글자·비밀번호·화면 내용은 저장하지 않아요 (횟수·타이밍 패턴만).\n' +
+        '· 감지·수집은 평일 업무시간(08:30~18:30)에만 이뤄져요.\n' +
+        '· 모든 설정·기록은 이 컴퓨터에만 로컬 저장돼요 (서버 계정 없음).',
+      buttons: ['확인'],
+      noLink: true,
+    })
+    saveHealth({ ...health, noticeShown: true })
+  }
   const cpNumber = health.memberId ?? 'CP-UNSET'
   try {
     await api.init({

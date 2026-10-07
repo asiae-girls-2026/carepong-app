@@ -26,6 +26,7 @@ export interface HealthConfig {
   aux?: AuxConfig
   minimalMotion?: boolean // 펫 움직임 최소화(배회 X, 눈깜빡임만)
   petOpacity?: number // 케어펫 투명도 %(20~100, 기본 100) — 방해금지 중 펫 투명도 (기획서 11번)
+  noticeShown?: boolean // 첫 실행 수집 안내 고지 완료 여부(1#2)
 }
 
 // 기획서 v12: 스트레칭 기본 4시간(240분), 휴식 기본 2시간(120분)

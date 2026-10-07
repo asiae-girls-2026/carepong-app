@@ -104,6 +104,15 @@ const fmtTime = (t: string): string => {
   if (h === undefined) return t
   return Number(m) ? `${Number(h)}시 ${Number(m)}분` : `${Number(h)}시`
 }
+// QA 전용 테스트 버튼 노출 플래그 — 최종 공개 배포 전에는 false로 바꾸고 빌드하세요(일반 사용자에게 숨김).
+const QA_MODE = true
+// 하트 적립 기준(Q2-a · 기획서8): 공백 제외 2자 이상 AND 자음/모음(미완성 글자)만이 아닌 메시지만 적립 — 오용(ㄱㄴㄷ·ㅏㅑ) 방지
+const earnsHeart = (t: string): boolean => {
+  const s = (t || '').replace(/\s/g, '')
+  if (s.length < 2) return false
+  if (/^[\u3131-\u3163]+$/.test(s)) return false
+  return true
+}
 // 두세 줄 요약 — 규칙 기반(Wizard-of-Oz). LLM 연동 시 이 함수만 교체하면 된다.
 const summarizeDay = (e: DiaryEntry): string[] => {
   const lines: string[] = []
@@ -195,6 +204,8 @@ export default function ChatApp() {
   const [gTimes, setGTimes] = useState<string[]>(['09:00'])
   const [regLogs, setRegLogs] = useState<RegLog[]>(loadRegLogs())
   const [localHearts, setLocalHearts] = useState(0) // 저장소 폴링(2초) 사이 즉시 반영용
+  const [unlockMsg, setUnlockMsg] = useState<string | null>(null) // 방꾸미기 해금 얼럿(5#21)
+  const prevRoomStageRef = useRef<number | null>(null)
   const [diary, setDiary] = useState<Record<string, DiaryEntry>>(loadDiary())
   const [expandedDay, setExpandedDay] = useState<string | null>(null)
   const [petPage, setPetPage] = useState(0)
@@ -278,7 +289,9 @@ export default function ChatApp() {
     window.petApi.debug('chat')
     setLocalHearts((h) => Math.min(10, Math.max(h, heartsToday) + 1))
   }
+  const waterToday = intake.waterDayStart === startOfLocalDay(Date.now()) ? intake.waterCups : 0 // 오늘 마신 물(2#16)
   const lifetimeChats = pet?.lifetime.chats ?? 0 // = 누적 하트 (방꾸미기 진척)
+  const moodDoneToday = !!diary[dayKeyOf(Date.now())]?.mood // 기분은 하루 1회만(5#38) — diary는 재실행에도 유지
   // 방꾸미기 단계 — 누적 하트 임계 (기획서 8번)
   const ROOM_STAGES = [
     { hearts: 10, item: '벽지' },
@@ -306,6 +319,20 @@ export default function ChatApp() {
       .reverse()
       .map((a, i) => ({ key: `${a.creature}-${i}`, url: poseUrl(a.creature, 5, 'idle') ?? spriteUrl(a.creature, 5), name: a.name, now: false })),
   ]
+
+  // 방꾸미기 단계 상승 시 해금 얼럿 (5#21) — 부팅 시(최초 null)엔 알림 없음
+  useEffect(() => {
+    if (prevRoomStageRef.current === null) { prevRoomStageRef.current = roomStage; return }
+    if (roomStage > prevRoomStageRef.current) {
+      const item = ROOM_STAGES[roomStage - 1]?.item
+      if (item) {
+        setUnlockMsg(`${item} 생겼어요! 🎉 미니홈을 꾸며보세요`)
+        setTimeout(() => setUnlockMsg(null), 3500)
+      }
+    }
+    prevRoomStageRef.current = roomStage
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomStage])
 
   const recordDiary = (patch: { mood?: string; moodLabel?: string; note?: string }): void => {
     setDiary((prev) => {
@@ -378,7 +405,7 @@ export default function ChatApp() {
     }
     if (/오늘/.test(text) && /약|복약/.test(text)) {
       const lines = config.medications.map(
-        (m) => `· ${m.name} ${m.times.join(', ')} ${takenToday(m.id) ? '✅ 완료' : '⬜ 아직'}`,
+        (m) => `· ${m.name} ${m.times.map(fmtTime).join(', ')} ${takenToday(m.id) ? '✅ 완료' : '⬜ 아직'}`,
       )
       resolveThinking(
         thinkingId,
@@ -419,7 +446,7 @@ export default function ChatApp() {
     if (!text) return
     setInput('')
     push({ role: 'user', text })
-    sendChatPing() // 대화 하트 +1 (하루 10칸, 다 채우면 보너스)
+    if (earnsHeart(text)) sendChatPing() // 대화 하트 +1 — 2자 이상·자모만 아닌 메시지만(4#2)
     const thinkingId = push({ role: 'pet', text: '', thinking: true })
     const started = Date.now()
     if (mode === 'med') {
@@ -471,6 +498,7 @@ export default function ChatApp() {
   }
 
   const pickMood = (m: (typeof MOODS)[number]): void => {
+    if (moodDoneToday) return // 하루 1회만(5#38)
     setMood(m.emoji)
     recordDiary({ mood: m.emoji, moodLabel: m.label })
     window.careApi.logEvent?.('mood_checked', 'M05', { mood: m.emoji })
@@ -530,7 +558,7 @@ export default function ChatApp() {
               <tbody>
                 <tr><th>🩷 행복</th><td>쓰다듬기 <b>+12</b> · 산책 <b>+8</b> · 대화/기분 체크 <b>+1</b></td></tr>
                 <tr><th>💪 건강</th><td>산책 <b>+10</b> · 밥 <b>+8</b> · 물 <b>+5</b> · 스트레칭 <b>+5</b></td></tr>
-                <tr><th>⚡ 기력</th><td>밥 <b>+12</b> · 약 챙기기 <b>+10</b> · 휴식 <b>+5</b> · 밤엔 자면서 회복</td></tr>
+                <tr><th>⚡ 기력</th><td>밥 <b>+12</b> · 약 챙기기 <b>+10</b> · 휴식 <b>+5</b></td></tr>
               </tbody>
             </table>
             <p className="mh__guide-note">방치하면 조금씩 내려가요.<br />그래도 0이 되면? 시무룩해질 뿐, 절대 죽지 않아요!</p>
@@ -601,9 +629,9 @@ export default function ChatApp() {
         {/* 상태 바 — 행복·건강·기력·XP 상시 표시 */}
         {pet && (
           <div className="mh__stats">
-            <MiniBar icon="🩷" value={pet.stats.happiness} color="#ff6b8a" title={`행복 ${Math.round(pet.stats.happiness)}\n쓰다듬기·산책·수다로 쑥쑥!`} />
-            <MiniBar icon="💪" value={pet.stats.health} color="#5ec27a" title={`건강 ${Math.round(pet.stats.health)}\n밥·산책·물·스트레칭!`} />
-            <MiniBar icon="⚡" value={pet.stats.energy} color="#f2b441" title={`기력 ${Math.round(pet.stats.energy)}\n밥과 약, 휴식으로 충전!`} />
+            <MiniBar icon="🩷" value={pet.stats.happiness} color="#ff6b8a" title={`행복 ${Math.round(pet.stats.happiness)}\n쓰다듬기 +12 · 산책 +8 · 대화 +1`} />
+            <MiniBar icon="💪" value={pet.stats.health} color="#5ec27a" title={`건강 ${Math.round(pet.stats.health)}\n산책 +10 · 밥 +8 · 물 +5 · 스트레칭 +5`} />
+            <MiniBar icon="⚡" value={pet.stats.energy} color="#f2b441" title={`기력 ${Math.round(pet.stats.energy)}\n밥 +12 · 약 +10 · 휴식 +5`} />
             <MiniBar
               icon="⭐"
               value={pet.stage >= 5 ? 100 : xpProgress(pet).pct}
@@ -632,6 +660,7 @@ export default function ChatApp() {
 
         <div className="mh__body">
           <div className="mh__content">
+            {unlockMsg && <div className="mh__unlock" role="status">{unlockMsg}</div>}
             {mode === 'med' && (
               <>
                 <div className="mh__card">
@@ -663,13 +692,19 @@ export default function ChatApp() {
                       ))}
                     </ul>
                   )}
+                  <div className="mh__med-extra">
+                    <span>오늘 물 💧 {waterToday}/{config.water.dailyTargetCups}컵</span>
+                    {(intake.medMissed ?? 0) > 0 && (
+                      <span className="mh__med-missed">놓친 복약 {intake.medMissed}회 <small>(벌점 없음)</small></span>
+                    )}
+                  </div>
                 </div>
               </>
             )}
 
             {mode === 'heart' && (
               <>
-                {!mood && (
+                {!mood && !moodDoneToday && (
                 <div className="mh__card">
                   <div className="mh__card-head">오늘 기분 어때요?</div>
                   <div className="mh__moods">
@@ -686,6 +721,9 @@ export default function ChatApp() {
                   </div>
                 </div>
                 )}
+                {(mood || moodDoneToday) && (
+                  <div className="mh__mood-today">오늘 기분 {mood ?? diary[dayKeyOf(Date.now())]?.mood} 골랐어요 · 내일 또 만나요 😊</div>
+                )}
                 <div className="mh__chips">
                   <button className="mh__chip" onClick={() => window.careApi.openRelief()}>🫧 1분 쉬어가기</button>
                 </div>
@@ -694,7 +732,7 @@ export default function ChatApp() {
 
             {mode === 'med' || mode === 'heart' ? (
               <>
-                <div ref={feedRef} className="mh__feed">
+                <div ref={feedRef} className={`mh__feed${mode === 'heart' ? ' mh__feed--heart' : ''}`}>
                   {messages.map((m) =>
                     m.role === 'user' ? (
                       <div key={m.id} className="msg msg--user">
@@ -954,7 +992,7 @@ export default function ChatApp() {
                     <ul className="mh__meds">
                       {config.medications.map((m) => (
                         <li key={m.id}>
-                          <span className="mh__med-name">💊 {m.name} <small>{m.times.join(', ')}</small></span>
+                          <span className="mh__med-name">💊 {m.name} <small>{m.times.map(fmtTime).join(', ')}</small></span>
                           <button className="mh__med-del" onClick={() => persist(removeMed(config, m.id))}>삭제</button>
                         </li>
                       ))}
@@ -1041,6 +1079,18 @@ export default function ChatApp() {
                     기록·데이터 관리에 쓰는 나만의 고유번호예요.<br />이름이나 연락처와는 연결되지 않아요.
                   </p>
                 </div>
+
+                {QA_MODE && (
+                  <div className="mh__card mh__qa">
+                    <div className="mh__card-head">🧪 QA 전용 <span className="mh__qa-tag">배포 빌드에선 숨김</span></div>
+                    <p className="mh__guide-note">테스트용 강제 상태 변경 버튼이에요. 일반 사용자에게는 보이지 않아요.</p>
+                    <div className="mh__qa-btns">
+                      <button onClick={() => window.petApi.debug('gauge0')}>게이지 0</button>
+                      <button onClick={() => window.petApi.debug('levelup')}>레벨업</button>
+                      <button onClick={() => { window.petApi.debug('heartreset'); setLocalHearts(0) }}>하트 초기화</button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

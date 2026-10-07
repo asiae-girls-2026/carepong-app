@@ -18,6 +18,7 @@ interface PetProps {
   stats: Stats
   bubble: string | null
   pose?: string // 포즈 코드(idle·eat·walk_r_1 …). 있으면 포즈 이미지로 렌더
+  bubbleClass?: string // 말풍선 화면 경계 보정 클래스(1#7)
 }
 
 export default function Pet({
@@ -33,6 +34,7 @@ export default function Pet({
   stats,
   bubble,
   pose,
+  bubbleClass,
 }: PetProps) {
   const usePose = !!pose && hasPoses(creature)
   const url = usePose ? poseUrl(creature, stage, pose as string) : spriteUrl(creature, stage)
@@ -43,7 +45,7 @@ export default function Pet({
   const flipX = usePose ? 1 : facing * squish
   return (
     <div className={`pet pet--${usePose ? 'idle' : animation}`} style={{ width: size, height: size }} data-testid="pet">
-      {bubble && <div className="pet__bubble">{bubble}</div>}
+      {bubble && <div className={`pet__bubble${bubbleClass ? ' ' + bubbleClass : ''}`}>{bubble}</div>}
       {gauge && !bubble && (
         <div className="pet__gauge">
           <div className="pet__gauge-head">

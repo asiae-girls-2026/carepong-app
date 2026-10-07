@@ -14,6 +14,9 @@ export interface IntakeLog {
   xpDay?: number // XP 상한용 날짜 키(epoch day)
   xpCounts?: Record<string, number> // 파트별 오늘 XP 적립 횟수 (med/water/stretch/rest/feed/pat/walk)
   feedTimes?: number[] // 최근 밥 시각(배부름 판정용)
+  reliefDay?: number // 완화 보상 상한용 날짜 키(epoch day)
+  reliefCount?: number // 오늘 완화 보상 지급 횟수 — 심호흡+명상 합산
+  lastReliefRewardAt?: number // 마지막 완화 보상 시각(쿨다운 30분)
 }
 
 export const EMPTY_INTAKE: IntakeLog = {
@@ -100,6 +103,26 @@ export function isFull(log: IntakeLog, now: number): boolean {
 export function recordFeed(log: IntakeLog, now: number): IntakeLog {
   const recent = (log.feedTimes ?? []).filter((t) => now - t < FEED_WINDOW_MS)
   return { ...log, feedTimes: [...recent, now] }
+}
+
+// ── 완화 보상 상한 (기획서 3-1·3-2: 심호흡+명상 합산 하루 3회 · 쿨다운 30분, 앱 측) ──
+export const RELIEF_DAILY_CAP = 3
+export const RELIEF_COOLDOWN_MS = 30 * 60 * 1000
+function rollReliefDay(log: IntakeLog, now: number): IntakeLog {
+  const day = Math.floor(now / 86_400_000)
+  if (log.reliefDay === day) return log
+  return { ...log, reliefDay: day, reliefCount: 0 }
+}
+// 지금 완화 보상을 줄 수 있나 (오늘 3회 미만 AND 마지막 보상에서 30분 경과). 공감챗봇은 미포함.
+export function canGrantRelief(log: IntakeLog, now: number): boolean {
+  const r = rollReliefDay(log, now)
+  if ((r.reliefCount ?? 0) >= RELIEF_DAILY_CAP) return false
+  if (r.lastReliefRewardAt && now - r.lastReliefRewardAt < RELIEF_COOLDOWN_MS) return false
+  return true
+}
+export function grantRelief(log: IntakeLog, now: number): IntakeLog {
+  const r = rollReliefDay(log, now)
+  return { ...r, reliefCount: (r.reliefCount ?? 0) + 1, lastReliefRewardAt: now }
 }
 
 export type ReminderKind = 'medication' | 'water' | 'stretch' | 'rest'

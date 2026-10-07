@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { poseUrl, spriteUrl } from './sprites'
 
 export type ReliefKind = 'breath' | 'meditate'
-type Mode = 'menu' | ReliefKind
+type Mode = 'menu' | 'scale' | ReliefKind
 
 interface ReliefOverlayProps {
   petImg: string | null
@@ -16,6 +16,10 @@ interface ReliefOverlayProps {
   onComplete: (kind: ReliefKind) => void
   onClose: () => void
   onSelect?: (kind: ReliefKind) => void // 심호흡/명상 선택 시 (relief_selected 기록)
+  askScale?: boolean // Route1: [예] 뒤 1~5 정도 선택(수집용)
+  showChat?: boolean // Route1: 완화메뉴에 [{펫이름}과 얘기하기] 3번째 노출
+  onScale?: (v: number) => void // 1~5 선택 기록
+  onChat?: () => void // 공감챗봇 열기
 }
 
 const BREATH_PHASES = [
@@ -157,8 +161,8 @@ const MENU = [
 ]
 
 /** 스트레스 임계 초과 시 뜨는 즉시 완화 오버레이 */
-export default function ReliefOverlay({ petImg, petName, creature, stage, onComplete, onClose, onSelect }: ReliefOverlayProps) {
-  const [mode, setMode] = useState<Mode>('menu')
+export default function ReliefOverlay({ petImg, petName, creature, stage, onComplete, onClose, onSelect, askScale, showChat, onScale, onChat }: ReliefOverlayProps) {
+  const [mode, setMode] = useState<Mode>(askScale ? 'scale' : 'menu')
   const [done, setDone] = useState<ReliefKind | null>(null)
   const onCompleteRef = useRef(onComplete)
   onCompleteRef.current = onComplete
@@ -182,6 +186,19 @@ export default function ReliefOverlay({ petImg, petName, creature, stage, onComp
             <p className="relief__title">잘하셨어요!</p>
             <p className="relief__sub">스트레스 지수가 내려갔어요</p>
           </div>
+        ) : mode === 'scale' ? (
+          <>
+            <div className="relief__center" style={{ marginBottom: 14 }}>
+              <p className="relief__title">어느 정도의 스트레스를 받고 계신 것 같나요?</p>
+              <p className="relief__sub">적음 1 — 5 많음 · 편하게 골라주세요</p>
+            </div>
+            <div className="relief__scale">
+              {[1, 2, 3, 4, 5].map((v) => (
+                <button key={v} onClick={() => { onScale?.(v); setMode('menu') }}>{v}</button>
+              ))}
+            </div>
+            <button className="relief__dismiss" onClick={onClose}>지금은 괜찮아요</button>
+          </>
         ) : mode === 'menu' ? (
           <>
             <div className="relief__center" style={{ marginBottom: 14 }}>
@@ -200,6 +217,15 @@ export default function ReliefOverlay({ petImg, petName, creature, stage, onComp
                   </span>
                 </button>
               ))}
+              {showChat && (
+                <button onClick={() => onChat?.()}>
+                  <span className="relief__menu-emoji" aria-hidden>💬</span>
+                  <span>
+                    <strong>{petName}과(와) 얘기하기</strong>
+                    <small>마음을 털어놓고 공감받기</small>
+                  </span>
+                </button>
+              )}
             </div>
             <button className="relief__dismiss" onClick={onClose}>
               지금은 괜찮아요
