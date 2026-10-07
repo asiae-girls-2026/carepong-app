@@ -984,11 +984,16 @@ export default function App() {
           const dayKey = Math.floor(Date.now() / 86400000)
           return { ...prev, chatsDay: dayKey, chatsToday: 0 }
         }
+        if (action === 'resetfirst') {
+          // 완전 초기화: 1세대 검정 고양이 Lv.1 · 게이지 70 · 누적기록/방꾸미기/도감까지 전부 리셋(이름 유지)
+          return createNewPet(prev.name, 'cat', Date.now())
+        }
         if (action === 'sad') return { ...prev, stats: { ...prev.stats, happiness: 20 } }
         if (action === 'heal') return { ...prev, stats: { health: 100, happiness: 100, energy: 100 } }
         return prev
       })
       if (action === 'rebirth') doRebirth()
+      if (action === 'resetfirst') { rebirthRef.current = false; setRebirthPrompt(false) }
       setTimeout(saveNow, 0) // QA/디버그 변경 즉시 저장 — 미니홈(2초 폴링) 반영
     })
     return off

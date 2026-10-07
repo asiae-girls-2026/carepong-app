@@ -1088,6 +1088,16 @@ export default function ChatApp() {
                       <button onClick={() => window.petApi.debug('gauge0')}>게이지 0</button>
                       <button onClick={() => window.petApi.debug('levelup')}>레벨업</button>
                       <button onClick={() => { window.petApi.debug('heartreset'); setLocalHearts(0) }}>하트 초기화</button>
+                      <button
+                        className="mh__qa-reset"
+                        title="검정 고양이 Lv.1 · 1세대부터 완전히 처음 상태로 (이름 유지)"
+                        onClick={() => {
+                          if (confirm('완전 초기화할까요?\n검정 고양이 Lv.1 · 1세대로 돌아가고 누적기록·방꾸미기·도감이 모두 리셋돼요.')) {
+                            window.petApi.debug('resetfirst')
+                            setLocalHearts(0)
+                          }
+                        }}
+                      >완전 초기화<br />(검정고양이 Lv.1)</button>
                     </div>
                   </div>
                 )}
