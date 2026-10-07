@@ -110,10 +110,10 @@ body {
 .mh__plant { position: absolute; bottom: 26px; right: 108px; font-size: 24px; }
 
 /* 펫 자리 (러그 + 그림자) */
-.mh__petspot { position: absolute; bottom: 8px; left: 50%; transform: translateX(-72%); }
+.mh__petspot { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); }
 /* (러그 제거: 인테리어는 배경 이미지에 포함 — 60하트 러그 배경으로 처리) */
 .mh__pet {
-  position: relative; width: 140px; height: 140px; object-fit: contain;
+  position: relative; width: 118px; height: 118px; object-fit: contain;
   image-rendering: pixelated;
   animation: hostBob 2.4s ease-in-out infinite;
 }
