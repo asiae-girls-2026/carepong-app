@@ -129,16 +129,16 @@ export function initStressManager(): void {
     }
   }
   ipcMain.on('collector:window', (_e, w: CollectorWindow) => void onServerWindow(w))
-
-  // ── (10/7) 수집기 실행: collector.exe stdout 1줄 → onServerWindow. 08:30~18:30(방해금지 밖)만, 설정 1분마다 반영 ──
-  ipcMain.on('collector:pause', (_e, on: boolean) => setCollectorPaused(on)) // 방해금지 수동 토글·수집 일시중지
+  ipcMain.on('collector:pause', (_e, on: boolean) => setCollectorPaused(on)) 
   scheduleCollector(
-    () => loadHealth(),
-    (line: CollectorLine) => void onServerWindow({ windowStart: line.window_start, features: line.features, dnd: false }),
-  )
+  () => loadHealth(),
+  (line: CollectorLine) => void onServerWindow({
+    windowStart: line.window_start,
+    features: line.features,
+    dnd: false
+  }),
+)
 
-  // ── 개발용 오프라인 데모: 수집기·서버 없이 로컬 임계로 팝업 (CAREPONG_DEV_SIM=1 일 때만) ──
-  // ⚠ 실제 판정 아님 — 데모·UI 확인용. 운영에선 끄고 collector:window 경로만 쓴다.
   if (process.env.CAREPONG_DEV_SIM === '1') {
     setInterval(() => {
       const now = Date.now()
