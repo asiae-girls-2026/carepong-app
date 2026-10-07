@@ -13,7 +13,14 @@ import { startOfLocalDay } from '../core/scheduler'
 import { replyEmpathy } from '../core/empathy'
 import { parseTimes, tryParseRegister, registerSummary, type ParsedTime } from '../core/medLui'
 import { normalizeAncestors, xpProgress } from '../core/progression'
-import { spriteUrl, poseUrl, roomBgFor } from './sprites'
+import { spriteUrl, poseUrl, roomBgFor, hasPoses, dexImg } from './sprites'
+
+// 펫 도감 슬롯 — 기획서 7번: ① 검정고양이 ② 고양이+공룡 ③ 미정 (creature id는 코드 진행순 cat→quokka→dog)
+const DEX_SLOTS: { creature: string | null; name: string; order: number }[] = [
+  { creature: 'cat', name: '검정 고양이', order: 1 },
+  { creature: 'quokka', name: '고양이+공룡', order: 2 },
+  { creature: 'dog', name: '미정', order: 3 },
+]
 
 type ChatMode = 'med' | 'heart' | 'settings' | 'archive'
 
@@ -774,41 +781,37 @@ export default function ChatApp() {
                 </form>
               </>
             ) : mode === 'archive' ? (
-              /* ── 📔 아카이브 — 역대 펫 + 마음 일기장 ── */
+              /* ── 📖 아카이브 — 펫 도감 + 마음 일기장 ── */
               <div className="mh__settings">
                 <div className="mh__card">
-                  <div className="mh__card-head">
-                    🐾 역대 펫
-                    {petCells.length > PETS_PER_PAGE && (
-                      <span className="mh__pets-nav">
-                        <button
-                          disabled={petPage === 0}
-                          onClick={() => setPetPage((n) => Math.max(0, n - 1))}
-                          aria-label="이전"
-                        >
-                          ◀
-                        </button>
-                        <button
-                          disabled={(petPage + 1) * PETS_PER_PAGE >= petCells.length}
-                          onClick={() => setPetPage((n) => n + 1)}
-                          aria-label="다음"
-                        >
-                          ▶
-                        </button>
-                      </span>
-                    )}
+                  <div className="mh__card-head">📖 펫 도감</div>
+                  <div className="mh__dexrow">
+                    {DEX_SLOTS.map((slot) => {
+                      const anc = normalizeAncestors(pet?.ancestors)
+                      const isActive = pet?.creature === slot.creature
+                      const ancMatch = anc.find((a) => a.creature === slot.creature)
+                      const acquired = !!slot.creature && hasPoses(slot.creature) && (isActive || !!ancMatch)
+                      const url = acquired
+                        ? poseUrl(slot.creature as string, isActive ? pet?.stage ?? 1 : 5, 'idle')
+                        : undefined
+                      const nm = isActive ? petName : ancMatch?.name ?? slot.name
+                      return (
+                        <div key={slot.order} className={`mh__dexslot${acquired ? ' mh__dexslot--got' : ''}`}>
+                          <div className="mh__dexart">
+                            {acquired && url ? (
+                              <img className="mh__deximg" src={url} alt={nm} draggable={false} />
+                            ) : (
+                              <img className="mh__deximg mh__deximg--myst" src={dexImg('mystery')} alt="미공개" draggable={false} />
+                            )}
+                            <img className="mh__dexframe" src={dexImg('frame')} alt="" draggable={false} />
+                            <span className="mh__dexno">{slot.order}</span>
+                          </div>
+                          <small className="mh__dexname">{acquired ? nm : '???'}</small>
+                        </div>
+                      )
+                    })}
                   </div>
-                  <div className="mh__petsrow">
-                    {petCells.slice(petPage * PETS_PER_PAGE, (petPage + 1) * PETS_PER_PAGE).map((cell) => (
-                      <div key={cell.key} className={`mh__petcell${cell.now ? ' mh__petcell--now' : ''}`}>
-                        {cell.url && <img src={cell.url} alt={cell.name} draggable={false} />}
-                        <small>{cell.name}</small>
-                      </div>
-                    ))}
-                  </div>
-                  {petCells.length <= 1 && (
-                    <p className="mh__empty">아직 첫 아이와 함께예요. 만렙이 되면 여기에 기록이 쌓여요!</p>
-                  )}
+                  <p className="mh__empty">보유 중인 친구는 현재 레벨 모습으로 보여요. 레벨이 오르면 도감 속 모습도 함께 자라요! 다음 친구는 미스터리 박스로 가려져 있어요.</p>
                 </div>
 
                 <div className="mh__card">

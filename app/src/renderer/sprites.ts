@@ -91,3 +91,12 @@ export function roomBgFor(hearts: number): string | undefined {
   }
   return roomBgs[0]
 }
+
+// ── 펫 도감 에셋 (assets/dex/*.png) — frame(테두리) · mystery(미스터리 박스) ──
+const dexModules = import.meta.glob('./assets/dex/*.png', { eager: true, import: 'default' }) as Record<string, string>
+const dexImgs: Record<string, string> = {}
+for (const [path, url] of Object.entries(dexModules)) {
+  const m = path.match(/dex\/(.+)\.png$/)
+  if (m) dexImgs[m[1]] = url
+}
+export const dexImg = (name: string): string | undefined => dexImgs[name]
