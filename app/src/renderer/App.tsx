@@ -150,6 +150,7 @@ export default function App() {
   const [hidden, setHidden] = useState(false)
   const [chewing, setChewing] = useState(false)
   const [gauge, setGauge] = useState(false)
+  const [chatVisible, setChatVisible] = useState(false) // 미니홈 창 표시중 — 게이지 팝업 겹침 방지
   const [bubble, setBubble] = useState<string | null>(null)
   const [facing, setFacing] = useState(1)
   const [moving, setMoving] = useState(false)
@@ -956,6 +957,12 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // 미니홈 창이 보이는 동안엔 게이지 팝업을 숨겨 창과 겹치지 않게 한다
+  useEffect(() => {
+    const off = window.petApi.onChatVisible(setChatVisible)
+    return off
+  }, [])
+
   // ── QA 디버그 + 미니홈 이벤트 (대화 하트 등) ──
   useEffect(() => {
     const off = window.petApi.onDebug((action) => {
@@ -1145,7 +1152,7 @@ export default function App() {
             generation={pet.generation}
             animation={anim}
             chewing={chewing}
-            gauge={gauge}
+            gauge={gauge && !chatVisible}
             moving={moving}
             blink={blink}
             facing={facing}

@@ -85,12 +85,17 @@ function createTray(): void {
   )
 }
 
+// 미니홈(chat) 표시 여부를 오버레이 펫 창에 알린다 — 미니홈이 보일 땐 게이지 팝업 숨김(겹침 방지)
+function notifyChatVisible(visible: boolean): void {
+  if (win && !win.isDestroyed()) win.webContents.send('chat:visible', visible)
+}
 function openChatWindow(mode: 'med' | 'heart' | 'settings' = 'heart'): void {
   if (chat && !chat.isDestroyed()) {
     if (chat.isMinimized()) chat.restore() // 1#12①: 최소화 후 재클릭 복구
     chat.show()
     chat.focus()
     chat.webContents.send('chat:setMode', mode)
+    notifyChatVisible(true)
     return
   }
   chat = new BrowserWindow({
@@ -116,7 +121,13 @@ function openChatWindow(mode: 'med' | 'heart' | 'settings' = 'heart'): void {
   }
   chat.on('closed', () => {
     chat = null
+    notifyChatVisible(false)
   })
+  chat.on('minimize', () => notifyChatVisible(false))
+  chat.on('restore', () => notifyChatVisible(true))
+  chat.on('show', () => notifyChatVisible(true))
+  chat.on('hide', () => notifyChatVisible(false))
+  notifyChatVisible(true)
 }
 
 function createWindow(): void {

@@ -22,6 +22,11 @@ const petApi = {
     return () => ipcRenderer.removeListener('config:changed', handler)
   },
   debug: (action: string): void => ipcRenderer.send('pet:debug', action),
+  onChatVisible: (cb: (visible: boolean) => void): (() => void) => {
+    const handler = (_e: unknown, visible: boolean): void => cb(visible)
+    ipcRenderer.on('chat:visible', handler)
+    return () => ipcRenderer.removeListener('chat:visible', handler)
+  },
   onDebug: (cb: (action: string) => void): (() => void) => {
     const handler = (_e: unknown, action: string): void => cb(action)
     ipcRenderer.on('pet:debugForward', handler)
