@@ -617,9 +617,9 @@ export default function ChatApp() {
             <p className="mh__guide-sec">📊 게이지, 뭘 하면 오를까?</p>
             <table className="mh__guide-table">
               <tbody>
-                <tr><th>🩷 행복</th><td>쓰다듬기 <b>+12</b> · 산책 <b>+8</b> · 대화/기분 체크 <b>+1</b></td></tr>
+                <tr><th>🩷 행복</th><td>쓰다듬기 <b>+12</b> · 산책 <b>+8</b> · 완화 <b>+10~12</b></td></tr>
                 <tr><th>💪 건강</th><td>산책 <b>+10</b> · 밥 <b>+8</b> · 물 <b>+5</b> · 스트레칭 <b>+5</b></td></tr>
-                <tr><th>⚡ 기력</th><td>밥 <b>+12</b> · 약 챙기기 <b>+10</b> · 휴식 <b>+5</b></td></tr>
+                <tr><th>⚡ 기력</th><td>밥 <b>+12</b> · 약 챙기기 <b>+10</b> · 휴식 <b>+8</b> · 완화 <b>+8~10</b></td></tr>
               </tbody>
             </table>
             <p className="mh__guide-note">방치하면 조금씩 내려가요.<br />그래도 0이 되면? 시무룩해질 뿐, 절대 죽지 않아요!</p>
@@ -690,9 +690,9 @@ export default function ChatApp() {
         {/* 상태 바 — 행복·건강·기력·XP 상시 표시 */}
         {pet && (
           <div className="mh__stats">
-            <MiniBar icon="🩷" value={pet.stats.happiness} color="#ff6b8a" title={`행복 ${Math.round(pet.stats.happiness)}\n쓰다듬기 +12 · 산책 +8 · 대화 +1`} />
+            <MiniBar icon="🩷" value={pet.stats.happiness} color="#ff6b8a" title={`행복 ${Math.round(pet.stats.happiness)}\n쓰다듬기 +12 · 산책 +8 · 완화 +10~12`} />
             <MiniBar icon="💪" value={pet.stats.health} color="#5ec27a" title={`건강 ${Math.round(pet.stats.health)}\n산책 +10 · 밥 +8 · 물 +5 · 스트레칭 +5`} />
-            <MiniBar icon="⚡" value={pet.stats.energy} color="#f2b441" title={`기력 ${Math.round(pet.stats.energy)}\n밥 +12 · 약 +10 · 휴식 +5`} />
+            <MiniBar icon="⚡" value={pet.stats.energy} color="#f2b441" title={`기력 ${Math.round(pet.stats.energy)}\n밥 +12 · 약 +10 · 휴식 +8 · 완화 +8~10`} />
             <MiniBar
               icon="⭐"
               value={xpProgress(pet).pct}

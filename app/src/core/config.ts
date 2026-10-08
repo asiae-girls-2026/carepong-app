@@ -28,8 +28,8 @@ export const ALARM_STRETCH = { health: 5, happiness: 3, xp: 5 }
 export const ALARM_REST = { energy: 8, xp: 5 }
 
 // ── 스트레스 개입 완료 보상 (규칙서 3.스트레스 개입) ──
-export const RELIEF_BREATH = { happiness: 10, energy: 8, xp: 15 } // 심호흡 약 1분
-export const RELIEF_MEDITATE = { happiness: 10, energy: 5, xp: 15 } // 명상 1~3분
+export const RELIEF_BREATH = { happiness: 10, energy: 8, xp: 15 } // 심호흡 ~57초 (기획서 3-1: 행복+10·기력+8)
+export const RELIEF_MEDITATE = { happiness: 12, energy: 10, xp: 15 } // 명상 90초 — 심호흡보다 이완 높게(기획서 3-1 A18: 행복+12·기력+10)
 
 // ── 기력 '과다 방지 리미트' (규칙서 5.상태 게이지 — 거짓 보고 억제, 의료 진단 아님) ──
 export const ENERGY_OVERLOAD_AT = 95 // 이 이상 지속되면 '무리/과다 주의'

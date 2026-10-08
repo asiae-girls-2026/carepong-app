@@ -13,8 +13,8 @@ export const MISSED_DOSE_GUIDE =
   '깜빡했다면: 생각난 즉시 복용하되, 다음 복용 시간이 가까우면 건너뛰세요. 절대 2회분을 한꺼번에 드시지 마세요.'
 
 export interface AuxConfig {
-  stretchMin: number // 스트레칭 알람 간격(분), 0=끔 — 규칙서 기본 60분(30~90)
-  restMin: number // 휴식 알람 간격(분), 0=끔 — 규칙서 초기 제안 50~90분 집중 후
+  stretchMin: number // 스트레칭 알람 간격(분), 0=끔 — 기획서 2.알람 기본 240분(4h, 최소 10분)
+  restMin: number // 휴식 알람 간격(분), 0=끔 — 기획서 2.알람 기본 120분(2h, 최소 20분)
 }
 
 export interface HealthConfig {
