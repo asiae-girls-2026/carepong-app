@@ -13,6 +13,7 @@ export interface MedSchedule {
   dose?: string // 용량 (예: "1정", "2캡슐")
   timing?: MedTiming // 복용 타이밍
   note?: string // 주의사항 메모 (예: "물과 함께", "자몽주스 금지")
+  createdAt?: number // 등록 시각 — 이 시각 이전에 지난 시간은 발동 안 함(등록 직후 즉시 알림 방지)
 }
 
 export interface WaterConfig {
@@ -45,7 +46,8 @@ export function isMedicationDue(
   lastTakenAt: number | null,
   dayStart: number,
 ): boolean {
-  const passed = scheduledTimesForDay(med, dayStart).filter((t) => t <= now)
+  // 등록(createdAt) 이전에 이미 지난 시간은 제외 — 알림은 설정한 시간의 '다음 도래'부터 발동
+  const passed = scheduledTimesForDay(med, dayStart).filter((t) => t <= now && t >= (med.createdAt ?? 0))
   if (passed.length === 0) return false
   const mostRecent = Math.max(...passed)
   return lastTakenAt === null || lastTakenAt < mostRecent

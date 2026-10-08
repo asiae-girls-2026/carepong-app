@@ -945,8 +945,9 @@ export default function ChatApp() {
                     <input
                       type="number" min={1} max={20}
                       value={config.water.dailyTargetCups}
-                      onChange={(e) => persist({ ...config, water: { ...config.water, dailyTargetCups: Number(e.target.value) } })}
+                      onChange={(e) => persist({ ...config, water: { ...config.water, dailyTargetCups: Math.min(20, Math.floor(Number(e.target.value)) || 0) } })}
                       onBlur={(e) => persist({ ...config, water: { ...config.water, dailyTargetCups: clampInt(e.target.value, 1, 20) } })}
+                      onKeyDown={(e) => { if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault() }}
                     />
                   </label>
                   <label className="mh__row">
@@ -954,8 +955,9 @@ export default function ChatApp() {
                     <input
                       type="number" min={20} max={240} step={10}
                       value={config.water.intervalMinutes}
-                      onChange={(e) => persist({ ...config, water: { ...config.water, intervalMinutes: Number(e.target.value) } })}
+                      onChange={(e) => persist({ ...config, water: { ...config.water, intervalMinutes: Math.min(240, Math.floor(Number(e.target.value)) || 0) } })}
                       onBlur={(e) => persist({ ...config, water: { ...config.water, intervalMinutes: clampInt(e.target.value, 20, 240) } })}
+                      onKeyDown={(e) => { if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault() }}
                     />
                   </label>
                   <div className="mh__stat-row">오늘 마신 물 💧 <b>{waterToday}/{config.water.dailyTargetCups}</b>컵</div>
@@ -965,8 +967,9 @@ export default function ChatApp() {
                     <input
                       type="number" min={10} max={360} step={10}
                       value={aux.stretchMin}
-                      onChange={(e) => persist({ ...config, aux: { ...aux, stretchMin: Number(e.target.value) } })}
+                      onChange={(e) => persist({ ...config, aux: { ...aux, stretchMin: Math.min(360, Math.floor(Number(e.target.value)) || 0) } })}
                       onBlur={(e) => persist({ ...config, aux: { ...aux, stretchMin: clampInt(e.target.value, 10, 360) } })}
+                      onKeyDown={(e) => { if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault() }}
                     />
                   </label>
                   <label className="mh__row">
@@ -974,8 +977,9 @@ export default function ChatApp() {
                     <input
                       type="number" min={20} max={240} step={5}
                       value={aux.restMin}
-                      onChange={(e) => persist({ ...config, aux: { ...aux, restMin: Number(e.target.value) } })}
+                      onChange={(e) => persist({ ...config, aux: { ...aux, restMin: Math.min(240, Math.floor(Number(e.target.value)) || 0) } })}
                       onBlur={(e) => persist({ ...config, aux: { ...aux, restMin: clampInt(e.target.value, 20, 240) } })}
+                      onKeyDown={(e) => { if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault() }}
                     />
                   </label>
                 </div>

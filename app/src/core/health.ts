@@ -71,7 +71,7 @@ export function createMed(
   days: number[],
   opts: { dose?: string; timing?: MedTiming; note?: string } = {},
 ): MedSchedule {
-  return { id, name, isSupplement, times, days, ...opts }
+  return { id, name, isSupplement, times, days, createdAt: Date.now(), ...opts }
 }
 
 export function addMed(config: HealthConfig, med: MedSchedule): HealthConfig {
