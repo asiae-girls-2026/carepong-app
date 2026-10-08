@@ -637,8 +637,8 @@ body {
 .mh__mood-today { margin: 2px 0 8px; font-size: 12px; color: #7a7494; text-align: center; }
 /* 기분대화 캐릭터 크게(5#32) */
 .mh__feed--heart { padding-top: 4px; }
-.mh__feed--heart .msg__avatar-img { width: 52px; height: 52px; }
-.mh__feed--heart .msg--pet { align-items: center; gap: 4px; } /* 아바타-말풍선 세로 가운데 + 가로 간격 축소 */
+.mh__feed--heart .msg__avatar-img { width: 68px; height: 68px; margin-right: -4px; }
+.mh__feed--heart .msg--pet { align-items: center; gap: 2px; } /* 아바타-말풍선 세로 가운데 + 간격 최소 */
 
 /* QA 완전 초기화 버튼 — 위험 동작 강조 */
 .mh__qa-reset { flex-basis: 100%; border-color: #d98c8c !important; color: #b2473f; line-height: 1.3; }
