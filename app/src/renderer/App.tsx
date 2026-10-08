@@ -1203,11 +1203,11 @@ export default function App() {
             autoFocus
             onChange={(e) => setNameInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') confirmName()
+              if (e.key === 'Enter' && nameInput.trim()) confirmName()
             }}
           />
           <div className="invite-prompt__actions">
-            <button className="rbtn rbtn--ok" onClick={confirmName}>
+            <button className="rbtn rbtn--ok" disabled={!nameInput.trim()} onClick={confirmName}>
               확인
             </button>
           </div>

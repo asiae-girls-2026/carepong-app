@@ -150,6 +150,8 @@ body { background: transparent; overflow: hidden; user-select: none; }
   cursor: pointer;
 }
 .rbtn--ok { background: #e4002b; border-color: #e4002b; color: #fff; font-weight: 700; }
+.rbtn:disabled { background: #ededed; border-color: #e0e0e0; color: #aaa; cursor: not-allowed; }
+.rbtn--ok:disabled { background: #efc0c7; border-color: #efc0c7; color: #fff; cursor: not-allowed; }
 
 @keyframes waddle { 0%, 100% { transform: rotate(-3deg) translateY(0); } 50% { transform: rotate(3deg) translateY(-3px); } }
 @keyframes blink { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(0.86); } }
