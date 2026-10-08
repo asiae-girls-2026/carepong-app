@@ -243,6 +243,7 @@ export default function ChatApp() {
   const [searchRevision, setSearchRevision] = useState(0)
   const [sName, setSName] = useState('') // 설정 탭 약 등록 폼
   const [sTimes, setSTimes] = useState<string[]>(['09:00'])
+  const [regNotice, setRegNotice] = useState('') // 중복 등록 안내(비차단) — 알럿 대신 인앱 메시지
   const [copied, setCopied] = useState(false) // 회원번호 복사 얼럿
   const nextId = useRef(3)
   const feedRef = useRef<HTMLDivElement>(null)
@@ -426,7 +427,7 @@ export default function ChatApp() {
       const have = new Set(existing.times)
       const toAdd = newTimes.filter((t) => !have.has(t))
       if (toAdd.length === 0) {
-        window.alert('이미 등록된 약이에요.')
+        // 비차단 처리 — 블로킹 window.alert는 이후 시간 입력(select)을 먹통으로 만듦. 안내는 호출부에서.
         return false
       }
       const mergedTimes = [...existing.times, ...toAdd].sort()
@@ -545,7 +546,11 @@ export default function ChatApp() {
       gName.trim(),
       gTimes.map((t) => ({ time: t, label: t })),
     )
-    if (!ok) return // 이미 등록된 약 — 알럿만 표시하고 폼 유지
+    if (!ok) {
+      // 같은 약·같은 시간 — 안내만(비차단), 폼은 그대로 두어 시간 바꿔 재등록 가능
+      push({ role: 'pet', text: '이미 등록된 약·시간이에요 🙂 시간을 바꿔서 다시 등록해 주세요.' })
+      return
+    }
     logReg('gui', guiStartRef.current)
     guiStartRef.current = null
     // 제출한 폼은 닫고 확인 메시지
@@ -617,9 +622,9 @@ export default function ChatApp() {
             <p className="mh__guide-sec">📊 게이지, 뭘 하면 오를까?</p>
             <table className="mh__guide-table">
               <tbody>
-                <tr><th>🩷 행복</th><td>쓰다듬기 <b>+12</b> · 산책 <b>+8</b> · 심호흡 <b>+10</b> · 명상 <b>+12</b></td></tr>
-                <tr><th>💪 건강</th><td>산책 <b>+10</b> · 밥 <b>+8</b> · 물 <b>+5</b> · 스트레칭 <b>+5</b></td></tr>
-                <tr><th>⚡ 기력</th><td>밥 <b>+12</b> · 약 챙기기 <b>+10</b> · 휴식 <b>+8</b> · 심호흡 <b>+8</b> · 명상 <b>+10</b></td></tr>
+                <tr><th>🩷 행복</th><td>쓰다듬기 <b>+12</b> · 명상 <b>+12</b> · 심호흡 <b>+10</b> · 산책 <b>+8</b> · 밥 <b>+5</b> · 스트레칭 <b>+3</b></td></tr>
+                <tr><th>💪 건강</th><td>산책 <b>+10</b> · 밥 <b>+8</b> · 물 <b>+5</b> · 스트레칭 <b>+5</b> · 쓰다듬기 <b>+3</b></td></tr>
+                <tr><th>⚡ 기력</th><td>밥 <b>+12</b> · 명상 <b>+10</b> · 약 챙기기 <b>+10</b> · 휴식 <b>+8</b> · 심호흡 <b>+8</b> <small>(산책은 −12 소모)</small></td></tr>
               </tbody>
             </table>
             <p className="mh__guide-note">방치하면 조금씩 내려가요.<br />그래도 0이 되면? 시무룩해질 뿐, 절대 죽지 않아요!</p>
@@ -690,9 +695,9 @@ export default function ChatApp() {
         {/* 상태 바 — 행복·건강·기력·XP 상시 표시 */}
         {pet && (
           <div className="mh__stats">
-            <MiniBar icon="🩷" value={pet.stats.happiness} color="#ff6b8a" title={`행복 ${Math.round(pet.stats.happiness)}\n쓰다듬기 +12 · 산책 +8 · 심호흡 +10 · 명상 +12`} />
-            <MiniBar icon="💪" value={pet.stats.health} color="#5ec27a" title={`건강 ${Math.round(pet.stats.health)}\n산책 +10 · 밥 +8 · 물 +5 · 스트레칭 +5`} />
-            <MiniBar icon="⚡" value={pet.stats.energy} color="#f2b441" title={`기력 ${Math.round(pet.stats.energy)}\n밥 +12 · 약 +10 · 휴식 +8 · 심호흡 +8 · 명상 +10`} />
+            <MiniBar icon="🩷" value={pet.stats.happiness} color="#ff6b8a" title={`행복 ${Math.round(pet.stats.happiness)}\n쓰다듬기 +12 · 명상 +12 · 심호흡 +10 · 산책 +8 · 밥 +5 · 스트레칭 +3`} />
+            <MiniBar icon="💪" value={pet.stats.health} color="#5ec27a" title={`건강 ${Math.round(pet.stats.health)}\n산책 +10 · 밥 +8 · 물 +5 · 스트레칭 +5 · 쓰다듬기 +3`} />
+            <MiniBar icon="⚡" value={pet.stats.energy} color="#f2b441" title={`기력 ${Math.round(pet.stats.energy)}\n밥 +12 · 명상 +10 · 약 +10 · 휴식 +8 · 심호흡 +8 (산책은 −12 소모)`} />
             <MiniBar
               icon="⭐"
               value={xpProgress(pet).pct}
@@ -1080,7 +1085,7 @@ export default function ChatApp() {
                       className="mh__ginput"
                       placeholder="약/영양제 이름"
                       value={sName}
-                      onChange={(e) => { setSelectedProduct(null); setSName(e.target.value) }}
+                      onChange={(e) => { setSelectedProduct(null); setSName(e.target.value); setRegNotice('') }}
                       maxLength={200}
                       aria-label="약·건기식 제품 검색"
                     />
@@ -1105,7 +1110,7 @@ export default function ChatApp() {
                         <span key={i} className="mh__gtime">
                           <TimeSelect
                             value={t}
-                            onChange={(v) => setSTimes((prev) => prev.map((x, idx) => (idx === i ? v : x)))}
+                            onChange={(v) => { setSTimes((prev) => prev.map((x, idx) => (idx === i ? v : x))); setRegNotice('') }}
                           />
                           {sTimes.length > 1 && (
                             <button onClick={() => setSTimes((prev) => prev.filter((_, idx) => idx !== i))}>−</button>
@@ -1116,13 +1121,19 @@ export default function ChatApp() {
                         + 시간
                       </button>
                     </div>
+                    {regNotice && <p className="mh__reg-notice" role="status" aria-live="polite">{regNotice}</p>}
                     <button
                       className="mh__gsubmit"
                       disabled={!sName.trim() || !selectedProduct || sTimes.some((t) => !t)}
                       onClick={() => {
                         if (!sName.trim() || !selectedProduct || sTimes.some((t) => !t)) return
                         const ok = registerMed(selectedProduct.product_name, sTimes.map((t) => ({ time: t, label: t })), selectedProduct)
-                        if (!ok) return // 이미 등록된 약 — 알럿만, 입력 유지
+                        if (!ok) {
+                          // 같은 약·같은 시간 — 입력은 그대로 두고 안내만. 시간을 바꿔 다시 등록 가능.
+                          setRegNotice('이미 등록된 약·시간이에요 — 시간을 바꿔서 다시 등록해 주세요.')
+                          return
+                        }
+                        setRegNotice('')
                         setSelectedProduct(null)
                         setSName('')
                         setSTimes(['09:00'])
