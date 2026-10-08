@@ -7,9 +7,9 @@ import type { CatalogItem } from '../core/catalog'
 import type { DrugInfo } from '../core/drugData'
 import type { Pet } from '../core/types'
 import type { HealthConfig } from '../core/health'
-import { DEFAULT_HEALTH_CONFIG, DEFAULT_AUX, createMed, addMed, removeMed } from '../core/health'
-import { EMPTY_INTAKE, recordMed, type IntakeLog } from '../core/intake'
-import { startOfLocalDay } from '../core/scheduler'
+import { DEFAULT_HEALTH_CONFIG, DEFAULT_AUX, createMed, addMed, removeMed, updateMed } from '../core/health'
+import { EMPTY_INTAKE, recordMed, recordMedDose, medAllTakenToday, medDoseTakenToday, type IntakeLog } from '../core/intake'
+import { startOfLocalDay, currentDueTime } from '../core/scheduler'
 import { replyEmpathy } from '../core/empathy'
 import { parseTimes, tryParseRegister, registerSummary, type ParsedTime } from '../core/medLui'
 import { normalizeAncestors, xpProgress, isMaxed } from '../core/progression'
@@ -402,19 +402,44 @@ export default function ChatApp() {
   const takenToday = (medId: string): boolean =>
     (intake.medsTakenAt[medId] ?? 0) >= startOfLocalDay(Date.now())
   const checkMed = (medId: string, name: string): void => {
-    const next = recordMed(intake, medId, Date.now())
+    const now = Date.now()
+    const med = config.medications.find((m) => m.id === medId)
+    const slot = med ? currentDueTime(med, now, startOfLocalDay(now)) : null
+    const next = slot ? recordMedDose(intake, medId, slot, now) : recordMed(intake, medId, now)
     setIntake(next)
     window.petApi.saveIntake(next)
     push({ role: 'pet', text: `${name} 복용 체크! ✅ 잘 챙기셨어요. 오늘도 제가 곁에서 응원할게요.` })
   }
 
-  // ── 약 등록 (LUI·GUI 공용) ──
-  const registerMed = (name: string, times: ParsedTime[], product?: CatalogItem): void => {
+  // 같은 약 판정 — 제품 ID가 있으면 ID, 없으면 이름(trim)으로 비교
+  const isSameMed = (m: { name: string; product_id?: number }, name: string, product?: CatalogItem): boolean => {
+    if (product?.product_id != null && m.product_id != null) return m.product_id === product.product_id
+    return m.name.trim() === name.trim()
+  }
+
+  // ── 약 등록 (LUI·GUI 공용) · 중복/병합 처리 ──
+  // 같은 약+시간 모두 같으면 '이미 등록' 알럿, 같은 약 다른 시간이면 기존 항목에 시간만 추가.
+  const registerMed = (name: string, times: ParsedTime[], product?: CatalogItem): boolean => {
+    const newTimes = times.map((t) => t.time)
+    const existing = config.medications.find((m) => isSameMed(m, name, product))
+    if (existing) {
+      const have = new Set(existing.times)
+      const toAdd = newTimes.filter((t) => !have.has(t))
+      if (toAdd.length === 0) {
+        window.alert('이미 등록된 약이에요.')
+        return false
+      }
+      const mergedTimes = [...existing.times, ...toAdd].sort()
+      const nextCfg = updateMed(config, existing.id, { times: mergedTimes })
+      window.petApi.saveConfig(nextCfg)
+      setConfig(nextCfg)
+      return true
+    }
     const med = createMed(
       crypto.randomUUID(),
       name,
       product?.item_type === 'HFF',
-      times.map((t) => t.time),
+      newTimes,
       [],
       { timing: times[0]?.timing },
     )
@@ -424,6 +449,7 @@ export default function ChatApp() {
     })
     window.petApi.saveConfig(addMed(config, med))
     setConfig((c) => addMed(c, med))
+    return true
   }
   const logReg = (method: 'lui' | 'gui', startedAt: number | null): void => {
     if (startedAt == null) return
@@ -515,10 +541,11 @@ export default function ChatApp() {
 
   const submitGui = (formMsgId: number): void => {
     if (!gName.trim()) return
-    registerMed(
+    const ok = registerMed(
       gName.trim(),
       gTimes.map((t) => ({ time: t, label: t })),
     )
+    if (!ok) return // 이미 등록된 약 — 알럿만 표시하고 폼 유지
     logReg('gui', guiStartRef.current)
     guiStartRef.current = null
     // 제출한 폼은 닫고 확인 메시지
@@ -1031,8 +1058,17 @@ export default function ChatApp() {
                       {config.medications.map((m) => (
                         <li key={m.id}>
                           <span className="mh__med-info">
-                            <span className="mh__med-name" title={m.name}>{takenToday(m.id) ? '✅' : '⬜'} {m.name}</span>
-                            <small className="mh__med-time">{m.times.map(fmtTime).join(', ')}</small>
+                            <span className="mh__med-check">{medAllTakenToday(intake, m.id, m.times, Date.now()) ? '✅' : '⬜'}</span>
+                            <span className="mh__med-text">
+                              <span className="mh__med-name" title={m.name}>{m.name}</span>
+                              <small className="mh__med-time">
+                                {m.times.flatMap((t, i) => {
+                                  const done = medDoseTakenToday(intake, m.id, t, Date.now())
+                                  const chip = <span key={t} className={done ? 'mh__med-time--done' : undefined}>{fmtTime(t)}</span>
+                                  return i === 0 ? [chip] : [<span key={t + '_sep'}>, </span>, chip]
+                                })}
+                              </small>
+                            </span>
                           </span>
                           <button className="mh__med-del" onClick={() => { if (window.confirm('삭제 시 복구할 수 없어요. 삭제하시겠습니까?')) persist(removeMed(config, m.id)) }}>삭제</button>
                         </li>
@@ -1085,7 +1121,8 @@ export default function ChatApp() {
                       disabled={!sName.trim() || !selectedProduct || sTimes.some((t) => !t)}
                       onClick={() => {
                         if (!sName.trim() || !selectedProduct || sTimes.some((t) => !t)) return
-                        registerMed(selectedProduct.product_name, sTimes.map((t) => ({ time: t, label: t })), selectedProduct)
+                        const ok = registerMed(selectedProduct.product_name, sTimes.map((t) => ({ time: t, label: t })), selectedProduct)
+                        if (!ok) return // 이미 등록된 약 — 알럿만, 입력 유지
                         setSelectedProduct(null)
                         setSName('')
                         setSTimes(['09:00'])

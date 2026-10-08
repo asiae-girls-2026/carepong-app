@@ -5,7 +5,7 @@
  *
  * 실시간 2개(postWindow·postSelfReport)만 즉시 전송. 나머지는 logEvent 로 로컬에 쌓였다가
  * 매일 08:30 또는 앱 시작 시 자동으로 묶어 전송(flushEvents). 서버가 받았다고 한 것만 지움.
- * 서버 주소는 환경변수 CAREPONG_API (기본 http://localhost:8000). AWS 올라가면 이 값만 교체.
+ * 서버 주소는 apiConfig.ts 의 API_BASE (기본 = ALB 운영 주소). 로컬 테스트만 CAREPONG_API=http://localhost:8000.
  */
 import fs from 'node:fs'
 import path from 'node:path'

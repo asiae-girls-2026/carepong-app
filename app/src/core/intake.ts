@@ -11,6 +11,7 @@ export interface IntakeLog {
   lastRestAt: number | null // 휴식 알람 이행/발동 기준 시각
   medConfirmed?: number // 누적 복약 확인 횟수
   medMissed?: number // 누적 복약 놓침(무시) 횟수 — 벌점 없음, 통계용
+  medDoses?: Record<string, number> // 시간대별 복약 기록 — 키 `${medId}|HH:MM`, 값=복용 시각. 모든 시간대 체크·시간별 색상용
   xpDay?: number // XP 상한용 날짜 키(epoch day)
   xpCounts?: Record<string, number> // 파트별 오늘 XP 적립 횟수 (med/water/stretch/rest/feed/pat/walk)
   feedTimes?: number[] // 최근 밥 시각(배부름 판정용)
@@ -42,6 +43,27 @@ export function recordMed(log: IntakeLog, medId: string, now: number): IntakeLog
     medsTakenAt: { ...log.medsTakenAt, [medId]: now },
     medConfirmed: (log.medConfirmed ?? 0) + 1,
   }
+}
+
+const medDoseKey = (medId: string, time: string): string => `${medId}|${time}`
+// 특정 시간대(HH:MM) 복약 기록 — medsTakenAt(약 단위)도 함께 갱신(기존 호환)
+export function recordMedDose(log: IntakeLog, medId: string, time: string, now: number): IntakeLog {
+  return {
+    ...log,
+    medsTakenAt: { ...log.medsTakenAt, [medId]: now },
+    medDoses: { ...(log.medDoses ?? {}), [medDoseKey(medId, time)]: now },
+    medConfirmed: (log.medConfirmed ?? 0) + 1,
+  }
+}
+// 이 약의 특정 시간대를 오늘 먹었나 (시간별 초록 글씨용)
+export function medDoseTakenToday(log: IntakeLog, medId: string, time: string, now: number): boolean {
+  return (log.medDoses?.[medDoseKey(medId, time)] ?? 0) >= startOfLocalDay(now)
+}
+// 등록된 '모든' 시간대를 오늘 다 먹었나 (2개 이상이면 전부 응답해야 체크). 시간대 없으면 기존 medsTakenAt 기준.
+export function medAllTakenToday(log: IntakeLog, medId: string, times: string[], now: number): boolean {
+  const day = startOfLocalDay(now)
+  if (!times || times.length === 0) return (log.medsTakenAt[medId] ?? 0) >= day
+  return times.every((t) => (log.medDoses?.[medDoseKey(medId, t)] ?? 0) >= day)
 }
 
 // 복약 알람을 무시(자동 사라짐)했을 때 — 놓침 1회 기록만. 게이지 벌점 없음(규칙서 원칙).

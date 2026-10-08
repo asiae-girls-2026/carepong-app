@@ -40,6 +40,26 @@ export function scheduledTimesForDay(med: MedSchedule, dayStart: number): number
   })
 }
 
+// now 시점에 '방금 도래한' 복약 시간대(HH:MM) — 가장 최근에 지난 예정 시각. 없으면 가장 이른 시각.
+// 시간대별 복약 체크를 어느 슬롯에 기록할지 판정용.
+export function currentDueTime(med: MedSchedule, now: number, dayStart: number): string | null {
+  const times = med.times ?? []
+  if (times.length === 0) return null
+  const ms = scheduledTimesForDay(med, dayStart) // med.times 와 인덱스 정렬. 요일 제외면 []
+  if (ms.length === 0) return times[0]
+  let bestPassed = -1
+  let bestPassedIdx = -1
+  let earliestIdx = 0
+  for (let i = 0; i < ms.length; i++) {
+    if (ms[i] <= now && ms[i] > bestPassed) {
+      bestPassed = ms[i]
+      bestPassedIdx = i
+    }
+    if (ms[i] < ms[earliestIdx]) earliestIdx = i
+  }
+  return times[bestPassedIdx >= 0 ? bestPassedIdx : earliestIdx]
+}
+
 export function isMedicationDue(
   med: MedSchedule,
   now: number,
