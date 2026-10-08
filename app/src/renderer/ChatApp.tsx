@@ -950,6 +950,7 @@ export default function ChatApp() {
                       onKeyDown={(e) => { if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault() }}
                     />
                   </label>
+                  <div className="mh__stat-row">오늘 마신 물 💧 <b>{waterToday}/{config.water.dailyTargetCups}</b>컵</div>
                   <label className="mh__row">
                     물 알림(분, 최소 20)
                     <input
@@ -960,7 +961,6 @@ export default function ChatApp() {
                       onKeyDown={(e) => { if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault() }}
                     />
                   </label>
-                  <div className="mh__stat-row">오늘 마신 물 💧 <b>{waterToday}/{config.water.dailyTargetCups}</b>컵</div>
                   {/* 스트레칭·휴식은 건강 펫의 기본 — 끌 수 없고 간격만 조절 */}
                   <label className="mh__row">
                     스트레칭 간격(분)
@@ -1009,13 +1009,12 @@ export default function ChatApp() {
                     </>
                   )}
                   <label className="mh__row">
-                    케어펫 투명도 (방해금지 중)
-                    <span>
+                    <span className="mh__opacity-label">케어펫 투명도<br />(방해금지 중)</span>
+                    <span className="mh__opacity">
                       <input type="range" min={20} max={100} step={5}
                         value={config.petOpacity ?? 40}
                         onChange={(e) => persist({ ...config, petOpacity: Number(e.target.value) })} />
-                      {' '}
-                      {config.petOpacity ?? 40}%
+                      <span className="mh__opacity-val">{config.petOpacity ?? 40}%</span>
                     </span>
                   </label>
                   <label className="mh__row">
@@ -1027,13 +1026,15 @@ export default function ChatApp() {
 
                 <div className="mh__card">
                   <div className="mh__card-head">💊 약 등록 · 관리</div>
-                  <div className="mh__stat-row">복약 놓친 횟수 <b>{intake.medMissed ?? 0}회</b> <small>(30초 무응답 자동 닫힘 · 벌점 없음)</small></div>
                   {config.medications.length > 0 && (
                     <ul className="mh__meds">
                       {config.medications.map((m) => (
                         <li key={m.id}>
-                          <span className="mh__med-name">💊 {m.name} <small>{m.times.map(fmtTime).join(', ')}</small></span>
-                          <button className="mh__med-del" onClick={() => persist(removeMed(config, m.id))}>삭제</button>
+                          <span className="mh__med-info">
+                            <span className="mh__med-name" title={m.name}>{takenToday(m.id) ? '✅' : '⬜'} {m.name}</span>
+                            <small className="mh__med-time">{m.times.map(fmtTime).join(', ')}</small>
+                          </span>
+                          <button className="mh__med-del" onClick={() => { if (window.confirm('삭제 시 복구할 수 없어요. 삭제하시겠습니까?')) persist(removeMed(config, m.id)) }}>삭제</button>
                         </li>
                       ))}
                     </ul>
@@ -1047,12 +1048,12 @@ export default function ChatApp() {
                       maxLength={200}
                       aria-label="약·건기식 제품 검색"
                     />
-                    <p role="status" aria-live="polite">{selectedProduct ? `선택: ${selectedProduct.product_name}` : searchStatus}</p>
+                    <p className="mh__search-status" role="status" aria-live="polite">{selectedProduct ? `선택: ${selectedProduct.product_name}` : searchStatus}</p>
                     {!selectedProduct && catalogItems.length > 0 && (
-                      <ul aria-label="제품 검색 후보" style={{ listStyle: 'none', padding: 0, maxHeight: 200, overflowY: 'auto' }}>
+                      <ul className="mh__cand" aria-label="제품 검색 후보">
                         {catalogItems.map((item) => (
                           <li key={`${item.item_type}-${item.product_id}`}>
-                            <button type="button" style={{ width: '100%', textAlign: 'left', padding: 8, marginBottom: 4 }}
+                            <button type="button"
                               onClick={() => { setSelectedProduct(item); setSName(item.product_name); setCatalogItems([]) }}>
                               {item.product_name}<br /><small>{item.manufacturer_name ?? '제조사 정보 없음'} · {item.item_type === 'DRUG' ? '의약품' : '건강기능식품'}</small>
                             </button>
@@ -1061,7 +1062,7 @@ export default function ChatApp() {
                       </ul>
                     )}
                     {!selectedProduct && sName.trim() && searchStatus !== '검색 중…' && (
-                      <button type="button" onClick={() => setSearchRevision((n) => n + 1)}>다시 검색</button>
+                      <button type="button" className="mh__search-retry" onClick={() => setSearchRevision((n) => n + 1)}>다시 검색</button>
                     )}
                     <div className="mh__gtimes">
                       {sTimes.map((t, i) => (
@@ -1098,7 +1099,7 @@ export default function ChatApp() {
 
 
                 <div className="mh__card">
-                  <div className="mh__card-head">🪪 회원번호</div>
+                  <div className="mh__card-head">🪪 회원번호{copied && <span className="mh__copied" role="status">복사되었습니다</span>}</div>
                   <div className="mh__member">
                     <code>{config.memberId ?? '발급 중…'}</code>
                     <button
@@ -1112,7 +1113,6 @@ export default function ChatApp() {
                     >
                       복사
                     </button>
-                    {copied && <span className="mh__copied" role="status">복사되었습니다</span>}
                   </div>
                   <p className="mh__guide-note">
                     기록·데이터 관리에 쓰는 나만의 고유번호예요.<br />이름이나 연락처와는 연결되지 않아요.
