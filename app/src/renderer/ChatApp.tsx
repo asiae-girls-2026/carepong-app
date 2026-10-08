@@ -12,7 +12,7 @@ import { EMPTY_INTAKE, recordMed, type IntakeLog } from '../core/intake'
 import { startOfLocalDay } from '../core/scheduler'
 import { replyEmpathy } from '../core/empathy'
 import { parseTimes, tryParseRegister, registerSummary, type ParsedTime } from '../core/medLui'
-import { normalizeAncestors, xpProgress } from '../core/progression'
+import { normalizeAncestors, xpProgress, isMaxed } from '../core/progression'
 import { spriteUrl, poseUrl, roomBgFor, hasPoses, dexImg } from './sprites'
 
 // 펫 도감 슬롯 — 기획서 7번: ① 검정고양이 ② 고양이+공룡 ③ 미정 (creature id는 코드 진행순 cat→quokka→dog)
@@ -668,9 +668,9 @@ export default function ChatApp() {
             <MiniBar icon="⚡" value={pet.stats.energy} color="#f2b441" title={`기력 ${Math.round(pet.stats.energy)}\n밥 +12 · 약 +10 · 휴식 +5`} />
             <MiniBar
               icon="⭐"
-              value={pet.stage >= 5 ? 100 : xpProgress(pet).pct}
+              value={xpProgress(pet).pct}
               color="#b9aee8"
-              title={pet.stage >= 5 ? '만렙! 이제 환생할 수 있어요' : `XP ${xpProgress(pet).into}/${xpProgress(pet).needed}\n돌보고 수다 떨면 쑥쑥!`}
+              title={isMaxed(pet) ? '환생 준비 완료! 이제 다음 친구를 만날 수 있어요' : `XP ${xpProgress(pet).into}/${xpProgress(pet).needed}\n${pet.stage >= 5 ? '환생까지 쑥쑥!' : '돌보고 수다 떨면 쑥쑥!'}`}
             />
           </div>
         )}
