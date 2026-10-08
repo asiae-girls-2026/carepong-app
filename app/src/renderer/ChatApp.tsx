@@ -244,6 +244,7 @@ export default function ChatApp() {
   const [sName, setSName] = useState('') // 설정 탭 약 등록 폼
   const [sTimes, setSTimes] = useState<string[]>(['09:00'])
   const [regNotice, setRegNotice] = useState('') // 중복 등록 안내(비차단) — 알럿 대신 인앱 메시지
+  const [confirmDelId, setConfirmDelId] = useState<string | null>(null) // 약 삭제 인앱 2단계 확인(비차단)
   const [copied, setCopied] = useState(false) // 회원번호 복사 얼럿
   const nextId = useRef(3)
   const feedRef = useRef<HTMLDivElement>(null)
@@ -1075,7 +1076,14 @@ export default function ChatApp() {
                               </small>
                             </span>
                           </span>
-                          <button className="mh__med-del" onClick={() => { if (window.confirm('삭제 시 복구할 수 없어요. 삭제하시겠습니까?')) persist(removeMed(config, m.id)) }}>삭제</button>
+                          {confirmDelId === m.id ? (
+                            <span className="mh__med-delconf">
+                              <button className="mh__med-del mh__med-del--yes" onClick={() => { persist(removeMed(config, m.id)); setConfirmDelId(null) }}>삭제</button>
+                              <button className="mh__med-del" onClick={() => setConfirmDelId(null)}>취소</button>
+                            </span>
+                          ) : (
+                            <button className="mh__med-del" onClick={() => setConfirmDelId(m.id)}>삭제</button>
+                          )}
                         </li>
                       ))}
                     </ul>
