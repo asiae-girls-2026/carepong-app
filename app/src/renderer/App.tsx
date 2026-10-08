@@ -151,7 +151,6 @@ export default function App() {
   const [chewing, setChewing] = useState(false)
   const [gauge, setGauge] = useState(false)
   const [chatVisible, setChatVisible] = useState(false) // 미니홈 창 표시중 — 게이지 팝업 겹침 방지
-  const chatVisibleRef = useRef(false) // 미니홈 열림 중엔 오버레이가 클릭을 가로채지 않도록
   const [bubble, setBubble] = useState<string | null>(null)
   const [facing, setFacing] = useState(1)
   const [moving, setMoving] = useState(false)
@@ -544,12 +543,8 @@ export default function App() {
     setReminder(r)
     log('alarm_shown', 'P02', { kind: ALARM_EVENT_KIND[r.kind], ...alarmProps(r) })
     // Windows 시스템 토스트는 띄우지 않는다 — 항상 위에 뜨는 인앱 말풍선과 중복(겹침) 방지
-    // 약 알람만 즉시 클릭을 잡는다 — 물·스트레칭·휴식은 말풍선에 마우스를 올렸을 때만 버튼이 눌린다.
-    // 단, 미니홈이 열려 있으면 가로채지 않음(미니홈 사용 중 알람이 떠도 창을 막지 않게)
-    if (r.kind === 'medication' && !chatVisibleRef.current) {
-      interactive.current = true
-      window.petApi.setClickThrough(false)
-    }
+    // 모든 알람(약 포함)은 말풍선 영역에 마우스를 올렸을 때만 버튼이 눌린다(영역 기반 onMove).
+    // → 오버레이가 전체 화면을 잡지 않아 미니홈·바탕화면을 막지 않음.
     if (reminderAutoTimer.current) clearTimeout(reminderAutoTimer.current)
     reminderAutoTimer.current = setTimeout(missReminder, REMINDER_AUTO_MS)
   }
@@ -852,16 +847,15 @@ export default function App() {
           cursor.y >= rb.top - m &&
           cursor.y <= rb.bottom + m
       }
+      // 영역 기반: 펫/말풍선 위에 있을 때만 클릭을 받고, 벗어나면 통과.
+      // (미니홈·바탕화면·다른 창을 막지 않으면서 펫·알람은 눌리게 — 모든 알람 공통)
       const over = overPet || overBubble
-      const medHold = reminderRef.current?.kind === 'medication' // 약 알람은 응답 전까지 유지
-      // 미니홈 열림 중엔 오버레이가 클릭을 가로채지 않게 유지(펫 위 hover해도 통과)
-      if (over && !interactive.current && !chatVisibleRef.current) {
+      if (over && !interactive.current) {
         interactive.current = true
         window.petApi.setClickThrough(false)
       } else if (
         !over &&
         interactive.current &&
-        !medHold &&
         !namingRef.current &&
         !rebirthRef.current &&
         !stressAlertRef.current &&
@@ -994,26 +988,7 @@ export default function App() {
 
   // 미니홈 창이 보이는 동안엔 게이지 팝업을 숨겨 창과 겹치지 않게 한다
   useEffect(() => {
-    const off = window.petApi.onChatVisible((visible: boolean) => {
-      setChatVisible(visible)
-      chatVisibleRef.current = visible
-      if (visible) {
-        // 미니홈이 열리면 오버레이가 전체 화면 클릭을 가로채지 않도록 통과 모드로.
-        // (약 알람 등으로 interactive 상태여도 미니홈을 정상 사용할 수 있게 — 로딩/클릭 불가 버그 방지)
-        interactive.current = false
-        window.petApi.setClickThrough(true)
-      } else if (
-        reminderRef.current ||
-        stressAlertRef.current ||
-        reliefOpenRef.current ||
-        namingRef.current ||
-        rebirthRef.current
-      ) {
-        // 미니홈 닫힘 → 아직 응답할 알람/상태가 남아 있으면 다시 상호작용 가능하게 복구
-        interactive.current = true
-        window.petApi.setClickThrough(false)
-      }
-    })
+    const off = window.petApi.onChatVisible(setChatVisible)
     return off
   }, [])
 
