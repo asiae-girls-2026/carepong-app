@@ -30,6 +30,7 @@ import { applyReward, clamp } from '../core/stats'
 import {
   dueReminders,
   recordMed,
+  recordMedDose,
   recordWater,
   recordStretch,
   recordRest,
@@ -45,7 +46,7 @@ import {
   type IntakeLog,
   type ReminderKind,
 } from '../core/intake'
-import { isWithinQuiet } from '../core/scheduler'
+import { isWithinQuiet, currentDueTime, startOfLocalDay } from '../core/scheduler'
 import { DEFAULT_HEALTH_CONFIG, TIMING_LABEL, MISSED_DOSE_GUIDE, type HealthConfig } from '../core/health'
 import { petPixelSize, spriteUrl, poseUrl } from './sprites'
 
@@ -150,6 +151,7 @@ export default function App() {
   const [chewing, setChewing] = useState(false)
   const [gauge, setGauge] = useState(false)
   const [chatVisible, setChatVisible] = useState(false) // 미니홈 창 표시중 — 게이지 팝업 겹침 방지
+  const chatVisibleRef = useRef(false) // 미니홈 열림 중엔 오버레이가 클릭을 가로채지 않도록
   const [bubble, setBubble] = useState<string | null>(null)
   const [facing, setFacing] = useState(1)
   const [moving, setMoving] = useState(false)
@@ -291,7 +293,14 @@ export default function App() {
     log('alarm_answered', 'P02', { kind: ALARM_EVENT_KIND[r.kind], answer: 'confirm', ...alarmProps(r) })
     const now = Date.now()
     if (r.kind === 'water') intakeRef.current = recordWater(intakeRef.current, now)
-    else if (r.kind === 'medication') intakeRef.current = recordMed(intakeRef.current, r.id, now)
+    else if (r.kind === 'medication') {
+      // 시간대별 기록 — '방금 도래한' 슬롯에 복약 체크(2개 이상 시간대 각각 체크용)
+      const med = configRef.current.medications.find((m) => m.id === r.id)
+      const slot = med ? currentDueTime(med, now, startOfLocalDay(now)) : null
+      intakeRef.current = slot
+        ? recordMedDose(intakeRef.current, r.id, slot, now)
+        : recordMed(intakeRef.current, r.id, now)
+    }
     else if (r.kind === 'stretch') intakeRef.current = recordStretch(intakeRef.current, now)
     else intakeRef.current = recordRest(intakeRef.current, now)
     window.petApi.saveIntake(intakeRef.current)
@@ -535,8 +544,9 @@ export default function App() {
     setReminder(r)
     log('alarm_shown', 'P02', { kind: ALARM_EVENT_KIND[r.kind], ...alarmProps(r) })
     // Windows 시스템 토스트는 띄우지 않는다 — 항상 위에 뜨는 인앱 말풍선과 중복(겹침) 방지
-    // 약 알람만 즉시 클릭을 잡는다 — 물·스트레칭·휴식은 말풍선에 마우스를 올렸을 때만 버튼이 눌린다
-    if (r.kind === 'medication') {
+    // 약 알람만 즉시 클릭을 잡는다 — 물·스트레칭·휴식은 말풍선에 마우스를 올렸을 때만 버튼이 눌린다.
+    // 단, 미니홈이 열려 있으면 가로채지 않음(미니홈 사용 중 알람이 떠도 창을 막지 않게)
+    if (r.kind === 'medication' && !chatVisibleRef.current) {
       interactive.current = true
       window.petApi.setClickThrough(false)
     }
@@ -844,7 +854,8 @@ export default function App() {
       }
       const over = overPet || overBubble
       const medHold = reminderRef.current?.kind === 'medication' // 약 알람은 응답 전까지 유지
-      if (over && !interactive.current) {
+      // 미니홈 열림 중엔 오버레이가 클릭을 가로채지 않게 유지(펫 위 hover해도 통과)
+      if (over && !interactive.current && !chatVisibleRef.current) {
         interactive.current = true
         window.petApi.setClickThrough(false)
       } else if (
@@ -983,7 +994,26 @@ export default function App() {
 
   // 미니홈 창이 보이는 동안엔 게이지 팝업을 숨겨 창과 겹치지 않게 한다
   useEffect(() => {
-    const off = window.petApi.onChatVisible(setChatVisible)
+    const off = window.petApi.onChatVisible((visible: boolean) => {
+      setChatVisible(visible)
+      chatVisibleRef.current = visible
+      if (visible) {
+        // 미니홈이 열리면 오버레이가 전체 화면 클릭을 가로채지 않도록 통과 모드로.
+        // (약 알람 등으로 interactive 상태여도 미니홈을 정상 사용할 수 있게 — 로딩/클릭 불가 버그 방지)
+        interactive.current = false
+        window.petApi.setClickThrough(true)
+      } else if (
+        reminderRef.current ||
+        stressAlertRef.current ||
+        reliefOpenRef.current ||
+        namingRef.current ||
+        rebirthRef.current
+      ) {
+        // 미니홈 닫힘 → 아직 응답할 알람/상태가 남아 있으면 다시 상호작용 가능하게 복구
+        interactive.current = true
+        window.petApi.setClickThrough(false)
+      }
+    })
     return off
   }, [])
 
@@ -1080,9 +1110,10 @@ export default function App() {
   const edgeCls = (prefix: string): string => {
     const cx = position.x + petSize / 2
     const cls: string[] = []
+    // 말풍선/알람 팝업 폭(최대 ~220) 절반 + 여유 → 가장자리에서 화면 밖으로 잘리지 않게 안쪽 정렬
     if (position.y < 150) cls.push(`${prefix}--below`)
-    if (cx < 120) cls.push(`${prefix}--pinleft`)
-    else if (cx > window.innerWidth - 120) cls.push(`${prefix}--pinright`)
+    if (cx < 150) cls.push(`${prefix}--pinleft`)
+    else if (cx > window.innerWidth - 150) cls.push(`${prefix}--pinright`)
     return cls.join(' ')
   }
   const bubbleCls = edgeCls('pet__bubble')
