@@ -19,12 +19,15 @@ import * as api from './api'
 const FURNITURE_THRESHOLDS = [10, 30, 60, 100, 150, 210, 280, 340, 400]
 const furnitureStage = (hearts: number): number =>
   FURNITURE_THRESHOLDS.filter((t) => hearts >= t).length
+// 서버 PUT /v1/pet 는 character_slot 을 1·2·3 숫자만 받음 (문자열 "cat" → 422).
+const CHARACTER_SLOTS: Record<string, number> = { cat: 1, quokka: 2, dog: 3 }
+const characterSlot = (creature: string): number => CHARACTER_SLOTS[creature] ?? 1
 function petBackup(state: PersistedState): Record<string, unknown> {
   const p = state.pet
   const hearts = p.lifetime?.chats ?? 0 // 하트 = 누적 대화(chat_message) — 서버도 chat_message 로 교차검증
   return {
     name: p.name,
-    character_slot: p.creature,
+    character_slot: characterSlot(p.creature),
     generation: p.generation,
     level: p.stage,
     xp: p.xp,
@@ -163,9 +166,15 @@ function createWindow(): void {
 }
 
 ipcMain.handle('pet:load', (): PersistedState | null => loadState())
+let lastPetBackupKey: string | null = null // 값이 바뀔 때만 서버 전송(15초마다 과다 호출 방지)
 ipcMain.on('pet:save', (_e, state: PersistedState) => {
   saveState(state)
-  void api.putPet(petBackup(state)) // 펫 상태 백업 (실패 무시)
+  const backup = petBackup(state)
+  const key = JSON.stringify({ ...backup, updated_at: '' }) // updated_at 제외하고 비교
+  if (key !== lastPetBackupKey) {
+    lastPetBackupKey = key
+    void api.putPet(backup) // 펫 상태 백업 (실패 무시)
+  }
 })
 // ── 서버 전송(api.js) 브리지 ──
 ipcMain.on('api:logEvent', (_e, { event, screen, props }: { event: string; screen: string | null; props?: Record<string, unknown> }) =>

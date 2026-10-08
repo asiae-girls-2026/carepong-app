@@ -215,6 +215,7 @@ export default function App() {
   const reliefEntryRef = useRef<'stress_prompt' | 'mind_tab'>('mind_tab') // Route1(감지 팝업) / Route2(1분 쉬어가기)
   const reliefStartRef = useRef(0)
   const reliefWindowIdRef = useRef<string | null>(null)
+  const reliefTriggerRef = useRef<string | null>(null) // P03 1~5 자가보고용 trigger(promptType) — promptCtx 비워진 뒤에도 유지
 
   // 서버 전송 호출 짧은 헬퍼 (민서 api.js · 호출위치표) — 미주입 환경에서도 안전하게 no-op
   const log = (event: string, screen: string | null, props: Record<string, unknown> = {}): void =>
@@ -707,6 +708,7 @@ export default function App() {
     // 진입 경로 판별은 응답 전에 (answerStressPrompt 가 promptCtx 를 비움)
     reliefEntryRef.current = promptCtxRef.current ? 'stress_prompt' : 'mind_tab'
     reliefWindowIdRef.current = promptCtxRef.current?.windowId ?? null
+    reliefTriggerRef.current = promptCtxRef.current?.promptType ?? null // 1~5 자가보고에 실을 trigger 보존
     setReliefRoute1(!!promptCtxRef.current) // Route1만 1~5 선택·대화 선택지 노출
     answerStressPrompt(1, 'answered') // "예" (Route2·메뉴 진입이면 promptCtx 없어 no-op)
     stressAlertRef.current = false
@@ -728,9 +730,19 @@ export default function App() {
       report_id: null,
     })
   }
-  // Route1 1~5 자가보고 — 데이터 수집용 기록만(완화 흐름엔 영향 없음) · 기획서 3-2
+  // Route1 1~5 자가보고 — self_reports.level_1to5 채움(혜윤 모델 라벨용) · 기획서 3-2
+  // 점수 선택 시점에 postSelfReport를 level1to5와 함께 한 번 더 전송(윈도우 응답 뒤 보강).
   const reportStressScale = (scale: number): void => {
-    log('stress_scale', 'P03', { scale, window_id: reliefWindowIdRef.current })
+    void window.careApi.selfReport?.({
+      windowId: reliefWindowIdRef.current,
+      trigger: reliefTriggerRef.current ?? 'spike',
+      yesno: 1,
+      status: 'answered',
+      level1to5: scale,
+      clickedAt: new Date().toISOString(),
+    })
+    // 이벤트명은 서버 허용 목록의 stress_score_answered (이전 stress_scale은 거절되어 큐에 쌓임)
+    log('stress_score_answered', 'P03', { scale, window_id: reliefWindowIdRef.current })
   }
   // 완화 3번째: {펫이름}과 얘기하기 — 공감챗봇 열기. 보상 없음(하트만)·상한/쿨다운 미포함(기획서 3-2)
   const chatRelief = (): void => {
