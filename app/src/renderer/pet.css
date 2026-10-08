@@ -85,9 +85,9 @@ body { background: transparent; overflow: hidden; user-select: none; }
 .pet__bubble {
   position: absolute;
   left: 50%;
-  bottom: 100%;
+  bottom: 62%; /* 펫 PNG 위 투명여백 보정 — 캐릭터 머리 근처로 */
   transform: translateX(-50%);
-  margin-bottom: 8px;
+  margin-bottom: 2px;
   max-width: 200px;
   width: max-content;
   padding: 7px 11px;
@@ -115,9 +115,9 @@ body { background: transparent; overflow: hidden; user-select: none; }
 .pet__reminder {
   position: absolute;
   left: 50%;
-  bottom: 100%;
+  bottom: 62%; /* 펫 머리 근처로 */
   transform: translateX(-50%);
-  margin-bottom: 8px;
+  margin-bottom: 2px;
   width: max-content;
   max-width: 220px;
   padding: 9px 11px;
