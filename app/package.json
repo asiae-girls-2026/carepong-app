@@ -65,8 +65,8 @@
     },
     "extraResources": [
       {
-        "from": "resources/collector.exe",
-        "to": "collector.exe"
+        "from": "resources/collector",
+        "to": "collector"
       }
     ]
   }
