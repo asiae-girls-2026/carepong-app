@@ -1077,9 +1077,9 @@ export default function ChatApp() {
                     </div>
                     <button
                       className="mh__gsubmit"
-                      disabled={!selectedProduct || sTimes.some((t) => !t)}
+                      disabled={!sName.trim() || !selectedProduct || sTimes.some((t) => !t)}
                       onClick={() => {
-                        if (!selectedProduct || sTimes.some((t) => !t)) return
+                        if (!sName.trim() || !selectedProduct || sTimes.some((t) => !t)) return
                         registerMed(selectedProduct.product_name, sTimes.map((t) => ({ time: t, label: t })), selectedProduct)
                         setSelectedProduct(null)
                         setSName('')
