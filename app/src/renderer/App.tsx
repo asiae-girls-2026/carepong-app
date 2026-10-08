@@ -532,7 +532,7 @@ export default function App() {
     reminderRef.current = r
     setReminder(r)
     log('alarm_shown', 'P02', { kind: ALARM_EVENT_KIND[r.kind], ...alarmProps(r) })
-    window.petApi.notify('케어퐁', REMINDER_UI[r.kind].text(r.label))
+    // Windows 시스템 토스트는 띄우지 않는다 — 항상 위에 뜨는 인앱 말풍선과 중복(겹침) 방지
     // 약 알람만 즉시 클릭을 잡는다 — 물·스트레칭·휴식은 말풍선에 마우스를 올렸을 때만 버튼이 눌린다
     if (r.kind === 'medication') {
       interactive.current = true
