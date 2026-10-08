@@ -70,7 +70,7 @@ export function nextCreature(current: string): string {
 export function rebirth(pet: Pet, now: number): Pet {
   return {
     ...pet,
-    creature: nextCreature(pet.creature),
+    // 베타: 환생해도 같은 캐릭터(냥냥퐁) 유지 — 캐릭터 순환 비활성
     stage: 1,
     xp: 0,
     stats: { health: INITIAL_GAUGE, happiness: INITIAL_GAUGE, energy: INITIAL_GAUGE },

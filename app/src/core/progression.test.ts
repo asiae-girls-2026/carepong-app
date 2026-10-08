@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createNewPet } from './types'
-import { addXp, isMaxed, rebirth, stageForXp, xpProgress, MAX_XP, CREATURES } from './progression'
+import { addXp, isMaxed, rebirth, stageForXp, xpProgress, MAX_XP } from './progression'
 
 describe('레벨·XP (규칙서 6시트)', () => {
   it('누적 XP 임계 — Lv.2=300, Lv.3=1,350, Lv.4=3,150, Lv.5=5,400 (기획서 v7 6시트)', () => {
@@ -32,7 +32,7 @@ describe('레벨·XP (규칙서 6시트)', () => {
 })
 
 describe('만렙 환생 (규칙서 7시트)', () => {
-  it('리셋: 레벨1·XP0·게이지70 / 유지: 세대+1·평생기록·이름, 외형은 다음 캐릭터로', () => {
+  it('리셋: 레벨1·XP0·게이지70 / 유지: 세대+1·평생기록·이름·외형(베타: 냥냥퐁 유지)', () => {
     const pet = {
       ...createNewPet('퐁이', 'cat', 0),
       xp: MAX_XP,
@@ -47,16 +47,15 @@ describe('만렙 환생 (규칙서 7시트)', () => {
     expect(born.generation).toBe(2)
     expect(born.lifetime).toEqual({ care: 12, alarms: 34, reliefs: 5, chats: 7 })
     expect(born.name).toBe('퐁이')
-    expect(born.creature).toBe('quokka')
+    expect(born.creature).toBe('cat')
     expect(born.ancestors).toEqual([{ creature: 'cat', name: '퐁이' }])
   })
 
-  it('캐릭터 3종 순환', () => {
-    expect(CREATURES).toHaveLength(3)
+  it('환생해도 같은 캐릭터 유지(베타) · 세대만 증가', () => {
     let pet = createNewPet('퐁이', 'cat', 0)
-    pet = rebirth(pet, 0) // → quokka
-    pet = rebirth(pet, 0) // → dog
-    pet = rebirth(pet, 0) // → cat (순환)
+    pet = rebirth(pet, 0)
+    pet = rebirth(pet, 0)
+    pet = rebirth(pet, 0)
     expect(pet.creature).toBe('cat')
     expect(pet.generation).toBe(4)
   })

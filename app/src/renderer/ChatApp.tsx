@@ -896,7 +896,7 @@ export default function ChatApp() {
                       )
                     })}
                   </div>
-                  <p className="mh__empty">보유 중인 친구는 현재 레벨 모습으로 보여요. 레벨이 오르면 도감 속 모습도 함께 자라요! 다음 친구는 미스터리 박스로 가려져 있어요.</p>
+                  <p className="mh__empty">레벨 5가 되면 랜덤으로 환생해요.<br />미스테리 펫을 모아보세요.</p>
                 </div>
 
                 <div className="mh__card">
