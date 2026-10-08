@@ -59,8 +59,6 @@ const WALK_SPEED = 3.0
 const IDLE_RANGE = 55
 const WALK_DURATION_MS = 10_000
 const SAVE_INTERVAL_MS = 15_000
-// QA 전용 동작 플래그 — 최종 공개 배포 전엔 false로(완화 쿨다운 정상 적용). ChatApp의 QA_MODE와 같이 맞추세요.
-const QA_MODE = true
 const CHEW_MS = 1000
 const EAT_ANIM_MS = 2200 // 밥 포즈 5컷 재생 길이(연출용 · 게이지 로직과 별개)
 const PAT_ANIM_MS = 1300 // 쓰다듬 포즈 3컷(pat_1→pat_2→face_happy)
@@ -73,7 +71,8 @@ const WALK_MSGS = ['같이 산책해요~ 어깨도 쭉 펴보세요! 🚶', '잠
 const TIRED_MSGS = ['헥헥… 오늘은 많이 걸었어요. 잠깐 쉴게요 😵', '기력이 부족해요… 밥이나 물을 챙겨주세요 🥺']
 const SLEEP_MSGS = ['밤이 깊었어요. 집사님도 이제 주무세요 😴', '저는 잘 준비할게요~ 굿나잇 🌙']
 const TIRED_ENERGY = 25
-const WALK_REFUSE_ENERGY = 20 // 기획서 v7: 기력<20이면 산책 거부(walk_refused)
+const WALK_REFUSE_ENERGY = 30 // 기력<30이면 산책 거부(walk_refused) — 피곤 표정, 소모·보상 없음
+const WALK_BLOCK_ENERGY = 20 // 기력<20이면 산책 행동 자체 불가
 
 // 알람 종류별 문구·버튼 (규칙서 2.행동 알람 — 캐릭터 안내 예시)
 const REMINDER_UI: Record<ReminderKind, { text: (label: string) => string; ok: string }> = {
@@ -195,6 +194,7 @@ export default function App() {
   const intakeRef = useRef<IntakeLog>(EMPTY_INTAKE)
   const reminderRef = useRef<Reminder | null>(null)
   const reminderAutoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reminderElRef = useRef<HTMLDivElement | null>(null) // 알람 팝업 DOM — hover 영역 정확 판정용
   const snoozeRef = useRef<Record<string, number>>({})
   const manualDndRef = useRef(false)
   const autoNightRef = useRef<boolean | null>(null) // 야간 방해금지 진입/해제 감지(최초 null=부팅 시 말풍선 억제)
@@ -758,8 +758,9 @@ export default function App() {
     window.careApi.calm() // 지수 완화는 상한과 무관하게 항상
     closeRelief()
     const now = Date.now()
-    // 완화 보상: 심호흡+명상 합산 하루 3회 · 쿨다운 30분(기획서 3-1·3-2). 초과 시 완화는 되지만 보상 없음
-    const grant = canGrantRelief(intakeRef.current, now, QA_MODE) // QA: 쿨다운 건너뜀(하루 3회 상한은 유지)
+    // 완화 보상: 1회 보상마다 30분 쿨다운 + 심호흡·명상 합산 하루 3회 상한(기획서 3-1·3-2).
+    // 쿨다운은 QA에서도 실제 적용(요청 반영). 초과 시 완화(지수 하락)는 되지만 보상(게이지·XP) 없음.
+    const grant = canGrantRelief(intakeRef.current, now)
     if (grant) {
       intakeRef.current = grantRelief(intakeRef.current, now)
       window.petApi.saveIntake(intakeRef.current)
@@ -816,14 +817,19 @@ export default function App() {
         width: sizeRef.current,
         height: sizeRef.current,
       })
-      // 알람 말풍선(펫 위쪽) 영역 — 물·스트레칭·휴식 알람은 여기 올렸을 때만 클릭 가능
-      const overBubble =
-        reminderRef.current != null &&
-        isPointInRect(
-          cursor,
-          { x: positionRef.current.x + sizeRef.current / 2 - 130, y: positionRef.current.y - 165 },
-          { width: 260, height: 175 },
-        )
+      // 알람 말풍선 영역 — 물·스트레칭·휴식 알람은 여기 올렸을 때만 클릭 가능.
+      // 팝업의 '실제' 화면 위치(ref)로 판정 → 머리 근처·화면 가장자리(아래/좌/우) 배치까지 정확히 커버.
+      let overBubble = false
+      const rEl = reminderElRef.current
+      if (reminderRef.current != null && rEl) {
+        const rb = rEl.getBoundingClientRect()
+        const m = 12 // 여유 마진(px)
+        overBubble =
+          cursor.x >= rb.left - m &&
+          cursor.x <= rb.right + m &&
+          cursor.y >= rb.top - m &&
+          cursor.y <= rb.bottom + m
+      }
       const over = overPet || overBubble
       const medHold = reminderRef.current?.kind === 'medication' // 약 알람은 응답 전까지 유지
       if (over && !interactive.current) {
@@ -867,7 +873,13 @@ export default function App() {
       return
     }
     if (kind === 'walk') {
-      // 기획서 v7 4.돌봄 E7: 기력<20 → 산책 거부(walk_refused), 소모·보상 없음
+      // 기력<20: 산책 행동 자체 불가(무리 방지) — 피곤 표정, 소모·보상 없음
+      if (p.stats.energy < WALK_BLOCK_ENERGY) {
+        showBubble('너무 지쳐서 지금은 산책을 못 해요 🥵 밥·물로 기력을 먼저 채워주세요', 3500)
+        log('care_action', 'P01', { type: 'walk_blocked' })
+        return
+      }
+      // 기력<30: 산책 거부(walk_refused) — 피곤 표정, 소모·보상 없음
       if (p.stats.energy < WALK_REFUSE_ENERGY) {
         showBubble('지금은 좀 지쳤어요… 조금 쉬었다 가요 🥺', 3500)
         log('care_action', 'P01', { type: 'walk_refused' })
@@ -1116,7 +1128,7 @@ export default function App() {
           }}
         >
           {reminder && (
-            <div className={`pet__reminder${reminderCls ? ' ' + reminderCls : ''}`} onPointerDown={(e) => e.stopPropagation()}>
+            <div ref={reminderElRef} className={`pet__reminder${reminderCls ? ' ' + reminderCls : ''}`} onPointerDown={(e) => e.stopPropagation()}>
               <div className="pet__reminder-text">{REMINDER_UI[reminder.kind].text(reminder.label)}</div>
               {reminderDetail && <div className="pet__reminder-detail">{reminderDetail}</div>}
               {reminderMed?.note && <div className="pet__reminder-detail">📌 {reminderMed.note}</div>}
