@@ -11,8 +11,21 @@ export const LV5_XP = XP_CUMULATIVE[4] // 5,400 — Lv.5(만렙 레벨) 진입
 export const REBIRTH_XP = 6750 // 환생(다음 캐릭터) 트리거
 export const MAX_XP = REBIRTH_XP // XP 상한(환생 시 0으로 리셋)
 
-// 캐릭터 3종 — 환생할 때마다 순서대로 다음 외형으로 바뀐다(규칙서: 외형이 '한 번' 바뀜)
+// (레거시) 과거 캐릭터 후보 — 현재 미사용
 export const CREATURES = ['cat', 'quokka', 'dog'] as const
+
+// 베타 캐릭터 2종 — 첫 등장은 랜덤, 환생 시 나머지로 전환(추후 3번째 캐릭터 추가 예정)
+export const BETA_CREATURES = ['cat', 'dragon'] as const
+
+// 첫 등장 캐릭터를 랜덤으로 뽑아 순서 배열을 만든다. [첫 캐릭터, 나머지]
+export function randomBetaOrder(): string[] {
+  const arr = [...BETA_CREATURES]
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr
+}
 
 export function stageForXp(xp: number): LifeStage {
   let stage = 1
@@ -51,7 +64,7 @@ export function xpProgress(pet: Pet): { into: number; needed: number; pct: numbe
 
 // 옛 저장 데이터(외형 문자열 배열)도 이름 있는 형태로 정규화
 // 이름 저장 이전의 기록은 복원이 불가능해 종 이름으로 표기한다
-const CREATURE_KO: Record<string, string> = { cat: '고양이', quokka: '쿼카', dog: '강아지' }
+const CREATURE_KO: Record<string, string> = { cat: '냥냥퐁', dragon: '용용퐁', quokka: '쿼카', dog: '강아지' }
 export function normalizeAncestors(arr: unknown): AncestorInfo[] {
   if (!Array.isArray(arr)) return []
   return arr.map((a) =>
@@ -68,9 +81,14 @@ export function nextCreature(current: string): string {
 // 리셋: 레벨→1, XP→0, 게이지→70 / 유지: 세대 +1, 평생 기록, 이름
 // 먼저 살던 아이는 ancestors에 남아 미니홈에서 계속 함께 산다
 export function rebirth(pet: Pet, now: number): Pet {
+  // 환생 시 순서 배열의 '다음' 캐릭터로 전환(끝이면 처음으로 — 베타 2종 왕복, 추후 캐릭터 추가 시 배열만 늘림)
+  const order = pet.speciesOrder && pet.speciesOrder.length > 0 ? pet.speciesOrder : [...BETA_CREATURES]
+  const idx = order.indexOf(pet.creature)
+  const nextCreature = idx >= 0 ? order[(idx + 1) % order.length] : order[0]
   return {
     ...pet,
-    // 베타: 환생해도 같은 캐릭터(냥냥퐁) 유지 — 캐릭터 순환 비활성
+    creature: nextCreature,
+    speciesOrder: order,
     stage: 1,
     xp: 0,
     stats: { health: INITIAL_GAUGE, happiness: INITIAL_GAUGE, energy: INITIAL_GAUGE },

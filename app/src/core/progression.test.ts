@@ -32,9 +32,9 @@ describe('레벨·XP (규칙서 6시트)', () => {
 })
 
 describe('만렙 환생 (규칙서 7시트)', () => {
-  it('리셋: 레벨1·XP0·게이지70 / 유지: 세대+1·평생기록·이름·외형(베타: 냥냥퐁 유지)', () => {
+  it('리셋: 레벨1·XP0·게이지70 / 유지: 세대+1·평생기록·이름 / 환생 시 순서상 다음 캐릭터로', () => {
     const pet = {
-      ...createNewPet('퐁이', 'cat', 0),
+      ...createNewPet('퐁이', 'cat', 0, ['cat', 'dragon']),
       xp: MAX_XP,
       stage: 5 as const,
       stats: { health: 40, happiness: 90, energy: 10 },
@@ -47,16 +47,26 @@ describe('만렙 환생 (규칙서 7시트)', () => {
     expect(born.generation).toBe(2)
     expect(born.lifetime).toEqual({ care: 12, alarms: 34, reliefs: 5, chats: 7 })
     expect(born.name).toBe('퐁이')
-    expect(born.creature).toBe('cat')
+    expect(born.creature).toBe('dragon') // cat → 다음 캐릭터(dragon)
     expect(born.ancestors).toEqual([{ creature: 'cat', name: '퐁이' }])
   })
 
-  it('환생해도 같은 캐릭터 유지(베타) · 세대만 증가', () => {
-    let pet = createNewPet('퐁이', 'cat', 0)
+  it('환생 시 순서배열대로 cat↔dragon 전환 · 세대 증가(베타 2종 왕복)', () => {
+    let pet = createNewPet('퐁이', 'cat', 0, ['cat', 'dragon'])
+    expect(pet.creature).toBe('cat')
     pet = rebirth(pet, 0)
-    pet = rebirth(pet, 0)
+    expect(pet.creature).toBe('dragon')
+    expect(pet.generation).toBe(2)
     pet = rebirth(pet, 0)
     expect(pet.creature).toBe('cat')
+    pet = rebirth(pet, 0)
+    expect(pet.creature).toBe('dragon')
     expect(pet.generation).toBe(4)
+  })
+
+  it('첫 등장이 dragon이면 환생 시 cat으로', () => {
+    let pet = createNewPet('퐁이', 'dragon', 0, ['dragon', 'cat'])
+    pet = rebirth(pet, 0)
+    expect(pet.creature).toBe('cat')
   })
 })

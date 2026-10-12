@@ -20,7 +20,7 @@ const FURNITURE_THRESHOLDS = [10, 30, 60, 100, 150, 210, 280, 340, 400]
 const furnitureStage = (hearts: number): number =>
   FURNITURE_THRESHOLDS.filter((t) => hearts >= t).length
 // 서버 PUT /v1/pet 는 character_slot 을 1·2·3 숫자만 받음 (문자열 "cat" → 422).
-const CHARACTER_SLOTS: Record<string, number> = { cat: 1, quokka: 2, dog: 3 }
+const CHARACTER_SLOTS: Record<string, number> = { cat: 1, dragon: 2, quokka: 2, dog: 3 }
 const characterSlot = (creature: string): number => CHARACTER_SLOTS[creature] ?? 1
 function petBackup(state: PersistedState): Record<string, unknown> {
   const p = state.pet

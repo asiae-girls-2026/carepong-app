@@ -15,12 +15,9 @@ import { parseTimes, tryParseRegister, registerSummary, type ParsedTime } from '
 import { normalizeAncestors, xpProgress, isMaxed } from '../core/progression'
 import { spriteUrl, poseUrl, roomBgFor, hasPoses, dexImg } from './sprites'
 
-// 펫 도감 슬롯 — 기획서 7번: ① 검정고양이 ② 고양이+공룡 ③ 미정 (creature id는 코드 진행순 cat→quokka→dog)
-const DEX_SLOTS: { creature: string | null; name: string; order: number }[] = [
-  { creature: 'cat', name: '검정 고양이', order: 1 },
-  { creature: 'quokka', name: '고양이+공룡', order: 2 },
-  { creature: 'dog', name: '미정', order: 3 },
-]
+// 펫 도감 — 베타 2종. 번호(순서)는 '랜덤 첫 등장 캐릭터가 1번' = pet.speciesOrder 기준
+const BETA_NAMES: Record<string, string> = { cat: '냥냥퐁', dragon: '용용퐁' }
+const DEFAULT_DEX_ORDER = ['cat', 'dragon'] // speciesOrder 없는 옛 저장용 기본
 
 type ChatMode = 'med' | 'heart' | 'settings' | 'archive'
 
@@ -589,7 +586,7 @@ export default function ChatApp() {
 
   const petName = pet?.name ?? '퐁이'
   const petImg = pet ? (poseUrl(pet.creature, pet.stage, 'idle') ?? spriteUrl(pet.creature, pet.stage)) : undefined
-  const roomBg = roomBgFor(lifetimeChats)
+  const roomBg = roomBgFor(pet?.creature ?? 'cat', lifetimeChats)
   const chatMode = mode === 'heart' ? 'heart' : 'med'
   const messages = feeds[chatMode]
 
@@ -904,17 +901,18 @@ export default function ChatApp() {
                 <div className="mh__card">
                   <div className="mh__card-head">📖 펫 도감</div>
                   <div className="mh__dexrow">
-                    {DEX_SLOTS.map((slot) => {
+                    {(pet?.speciesOrder && pet.speciesOrder.length > 0 ? pet.speciesOrder : DEFAULT_DEX_ORDER).map((creature, i) => {
+                      const order = i + 1 // 랜덤 첫 등장 캐릭터가 1번
                       const anc = normalizeAncestors(pet?.ancestors)
-                      const isActive = pet?.creature === slot.creature
-                      const ancMatch = anc.find((a) => a.creature === slot.creature)
-                      const acquired = !!slot.creature && hasPoses(slot.creature) && (isActive || !!ancMatch)
+                      const isActive = pet?.creature === creature
+                      const ancMatch = anc.find((a) => a.creature === creature)
+                      const acquired = hasPoses(creature) && (isActive || !!ancMatch)
                       const url = acquired
-                        ? poseUrl(slot.creature as string, isActive ? pet?.stage ?? 1 : 5, 'idle')
+                        ? poseUrl(creature, isActive ? pet?.stage ?? 1 : 5, 'idle')
                         : undefined
-                      const nm = isActive ? petName : ancMatch?.name ?? slot.name
+                      const nm = isActive ? petName : ancMatch?.name ?? BETA_NAMES[creature] ?? creature
                       return (
-                        <div key={slot.order} className={`mh__dexslot${acquired ? ' mh__dexslot--got' : ''}`}>
+                        <div key={creature} className={`mh__dexslot${acquired ? ' mh__dexslot--got' : ''}`}>
                           <div className="mh__dexart">
                             {acquired && url ? (
                               <img className="mh__deximg" src={url} alt={nm} draggable={false} />
@@ -922,7 +920,7 @@ export default function ChatApp() {
                               <img className="mh__deximg mh__deximg--myst" src={dexImg('mystery')} alt="미공개" draggable={false} />
                             )}
                             <img className="mh__dexframe" src={dexImg('frame')} alt="" draggable={false} />
-                            <span className="mh__dexno">{slot.order}</span>
+                            <span className="mh__dexno">{order}</span>
                           </div>
                           <small className="mh__dexname">{acquired ? nm : '???'}</small>
                         </div>
@@ -1186,9 +1184,9 @@ export default function ChatApp() {
                       <button onClick={() => window.petApi.debug('heartnext')}>방꾸미기 다음단계</button>
                       <button
                         className="mh__qa-reset"
-                        title="검정 고양이 Lv.1 · 1세대부터 완전히 처음 상태로 (이름 유지)"
+                        title="랜덤 캐릭터 Lv.1 · 1세대부터 완전히 처음 상태로 (이름 유지)"
                         onClick={() => {
-                          if (confirm('완전 초기화할까요?\n검정 고양이 Lv.1 · 1세대로 돌아가고 누적기록·방꾸미기·도감이 모두 리셋돼요.')) {
+                          if (confirm('완전 초기화할까요?\n랜덤 캐릭터 Lv.1 · 1세대로 돌아가고 누적기록·방꾸미기·도감이 모두 리셋돼요.')) {
                             window.petApi.debug('resetfirst')
                             setLocalHearts(0)
                           }

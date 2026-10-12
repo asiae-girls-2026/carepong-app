@@ -7,12 +7,11 @@ import { decayDropsBetween } from './petEngine'
 import { animationStateFor } from './animation'
 import { isPointInRect, clampToBounds } from './geometry'
 import { createNewPet, type Pet as PetModel } from '../core/types'
-import { addXp, rebirth, MAX_XP, isMaxed, XP_CUMULATIVE, REBIRTH_XP, MAX_LEVEL } from '../core/progression'
+import { addXp, rebirth, randomBetaOrder, MAX_XP, isMaxed, XP_CUMULATIVE, REBIRTH_XP, MAX_LEVEL } from '../core/progression'
 import { applyCare, type CareKind } from '../core/care'
 import {
   DECAY_HOURS,
   DECAY_DROP,
-  DEFAULT_CREATURE,
   TICK_INTERVAL_MS,
   ALARM_MED,
   ALARM_WATER,
@@ -362,7 +361,9 @@ export default function App() {
         setPet(saved.pet)
         setPosition(start)
       } else {
-        setPet(createNewPet('퐁이', DEFAULT_CREATURE, now))
+        // 첫 실행: 냥냥퐁/용용퐁 중 랜덤으로 첫 캐릭터 결정(순서 배열 저장 — 환생·도감 기준)
+        const order = randomBetaOrder()
+        setPet(createNewPet('퐁이', order[0], now, order))
         setNaming(true)
         namingRef.current = true
         interactive.current = true
@@ -1032,8 +1033,9 @@ export default function App() {
           return { ...prev, lifetime: { ...prev.lifetime, chats: (prev.lifetime.chats ?? 0) + 50 } }
         }
         if (action === 'resetfirst') {
-          // 완전 초기화: 1세대 검정 고양이 Lv.1 · 게이지 70 · 누적기록/방꾸미기/도감까지 전부 리셋(이름 유지)
-          return createNewPet(prev.name, 'cat', Date.now())
+          // 완전 초기화: 1세대 Lv.1 · 게이지 70 · 누적기록/방꾸미기/도감 전부 리셋(이름 유지) · 첫 캐릭터 랜덤 재추첨
+          const order = randomBetaOrder()
+          return createNewPet(prev.name, order[0], Date.now(), order)
         }
         if (action === 'heartnext') {
           // QA 방꾸미기 테스트 — 누적 하트를 다음 해금 단계로 점프

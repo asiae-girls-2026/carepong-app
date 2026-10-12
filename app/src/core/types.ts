@@ -30,6 +30,7 @@ export interface Pet {
   birthday: number // 이번 생 시작 시각
   generation: number // 세대 — 몇 번째 아이인지 (환생마다 +1, 평생 유지)
   ancestors: AncestorInfo[] // 먼저 살던 아이들(외형+이름) — 미니홈·아카이브에 남는다
+  speciesOrder?: string[] // 캐릭터 등장 순서 [첫 캐릭터, 다음…] — 첫 실행 시 랜덤 결정. 도감 번호·환생 순서 기준
   lifetime: LifetimeLog
   chatsDay: number // 오늘의 하트 게이지용 — 날짜 키(epoch day)
   chatsToday: number // 오늘 나눈 대화 수 (하트 10칸)
@@ -37,7 +38,7 @@ export interface Pet {
 
 export const INITIAL_GAUGE = 70
 
-export function createNewPet(name: string, creature: string, now: number): Pet {
+export function createNewPet(name: string, creature: string, now: number, speciesOrder?: string[]): Pet {
   return {
     name,
     creature,
@@ -47,6 +48,7 @@ export function createNewPet(name: string, creature: string, now: number): Pet {
     birthday: now,
     generation: 1,
     ancestors: [],
+    speciesOrder: speciesOrder ?? [creature],
     lifetime: { care: 0, alarms: 0, reliefs: 0, chats: 0 },
     chatsDay: 0,
     chatsToday: 0,

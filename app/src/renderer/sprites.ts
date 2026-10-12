@@ -77,19 +77,27 @@ export function poseUrl(creature: string, level: number, pose: string): string |
   return undefined
 }
 
-// ── 방 배경 (assets/room/<하트임계>.png) — 방꾸미기 단계별 전체 방 이미지 ──
-const roomModules = import.meta.glob('./assets/room/*.png', { eager: true, import: 'default' }) as Record<string, string>
-const roomBgs: Record<number, string> = {}
-for (const [path, url] of Object.entries(roomModules)) {
+// ── 방 배경 — 캐릭터별 분리. 현재 캐릭터에 맞는 방이 뜬다. 배경 없는 캐릭터는 빈 방 ──
+// 루트(assets/room/<하트임계>.png) = 냥냥퐁(cat) 기존 배경 / 하위폴더(assets/room/<캐릭터>/<하트임계>.png) = 캐릭터별 배경(예: room/dragon/…)
+const rootRoomModules = import.meta.glob('./assets/room/*.png', { eager: true, import: 'default' }) as Record<string, string>
+const subRoomModules = import.meta.glob('./assets/room/*/*.png', { eager: true, import: 'default' }) as Record<string, string>
+const roomBgs: Record<string, Record<number, string>> = {}
+for (const [path, url] of Object.entries(rootRoomModules)) {
   const m = path.match(/room\/(\d+)\.png$/)
-  if (m) roomBgs[Number(m[1])] = url
+  if (m) (roomBgs['cat'] ??= {})[Number(m[1])] = url
 }
-// 누적 하트 수에 맞는 방 배경(없는 단계는 바로 아래 단계로 대체). 0 = 빈방.
-export function roomBgFor(hearts: number): string | undefined {
+for (const [path, url] of Object.entries(subRoomModules)) {
+  const m = path.match(/room\/([^/]+)\/(\d+)\.png$/)
+  if (m) (roomBgs[m[1]] ??= {})[Number(m[2])] = url
+}
+// 캐릭터+누적 하트에 맞는 방 배경(없는 단계는 바로 아래 단계로 대체). 해당 캐릭터 배경이 아예 없으면 undefined(빈 방).
+export function roomBgFor(creature: string, hearts: number): string | undefined {
+  const byHearts = roomBgs[creature]
+  if (!byHearts) return undefined // 배경 미제공 캐릭터(예: 아직 배경 없는 dragon) → 빈 방
   for (const t of [400, 340, 280, 210, 150, 100, 60, 30, 10, 0]) {
-    if (hearts >= t && roomBgs[t]) return roomBgs[t]
+    if (hearts >= t && byHearts[t]) return byHearts[t]
   }
-  return roomBgs[0]
+  return byHearts[0]
 }
 
 // ── 펫 도감 에셋 (assets/dex/*.png) — frame(테두리) · mystery(미스터리 박스) ──
