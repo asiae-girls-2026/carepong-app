@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain, screen, Menu, Notification, Tray, nativeImage, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, Menu, Notification, Tray, nativeImage, dialog, shell } from 'electron'
+import type { UpdateInfo } from '../core/update'
 import { join } from 'path'
 import {
   loadState,
@@ -195,6 +196,50 @@ ipcMain.handle('intake:load', (): IntakeLog => loadIntake())
 ipcMain.on('intake:save', (_e, log: IntakeLog) => saveIntake(log))
 ipcMain.on('pet:notify', (_e, { title, body }: { title: string; body: string }) => {
   if (Notification.isSupported()) new Notification({ title, body }).show()
+})
+
+// ── 버전 확인 (설정 하단) ─────────────────────────────────────────────
+// 설치파일은 "공개" 저장소의 Releases 에 올린다(코드 저장소 carepong-app 은 Private 유지).
+// 모든 사용자가 GitHub 로그인 없이 최신 버전을 확인하고 받을 수 있게 하려면 릴리스 저장소가 Public 이어야 한다.
+const RELEASES_REPO = 'asiae-girls-2026/carepong-releases' // ← 설치파일(.exe)을 올릴 공개 저장소. 바뀌면 여기만 수정
+// "v0.1.9" / "0.1.9.0" 등 → 숫자 배열 비교. a<b → 음수, 같으면 0, a>b → 양수
+function cmpVer(a: string, b: string): number {
+  const p = (s: string): number[] => s.replace(/^v/i, '').split(/[.\-+]/).map((x) => parseInt(x, 10) || 0)
+  const A = p(a)
+  const B = p(b)
+  for (let i = 0; i < Math.max(A.length, B.length); i++) {
+    const d = (A[i] ?? 0) - (B[i] ?? 0)
+    if (d !== 0) return d
+  }
+  return 0
+}
+ipcMain.handle('app:version', (): string => app.getVersion())
+ipcMain.handle('app:checkUpdate', async (): Promise<UpdateInfo> => {
+  const current = app.getVersion()
+  const fail = (error: string): UpdateInfo => ({ current, latest: null, isLatest: true, downloadUrl: null, error })
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), 6000)
+  try {
+    const res = await fetch(`https://api.github.com/repos/${RELEASES_REPO}/releases/latest`, {
+      headers: { Accept: 'application/vnd.github+json' },
+      signal: ctrl.signal,
+    })
+    if (res.status === 404) return fail('아직 공개된 릴리스가 없어요')
+    if (!res.ok) return fail(`버전 확인 실패 (HTTP ${res.status})`)
+    const j = (await res.json()) as { tag_name?: string; html_url?: string; assets?: { name?: string; browser_download_url?: string }[] }
+    const latest = String(j.tag_name ?? '').replace(/^v/i, '')
+    if (!latest) return fail('최신 버전 정보를 읽지 못했어요')
+    const exe = Array.isArray(j.assets) ? j.assets.find((a) => typeof a?.name === 'string' && a.name.toLowerCase().endsWith('.exe')) : undefined
+    const downloadUrl = exe?.browser_download_url ?? j.html_url ?? null
+    return { current, latest, isLatest: cmpVer(current, latest) >= 0, downloadUrl, error: null }
+  } catch {
+    return fail('네트워크 확인 실패 (인터넷 연결을 확인해 주세요)')
+  } finally {
+    clearTimeout(t)
+  }
+})
+ipcMain.on('app:openExternal', (_e, url: string) => {
+  if (typeof url === 'string' && /^https:\/\//i.test(url)) void shell.openExternal(url)
 })
 // 패널 QA 디버그 → 오버레이
 ipcMain.on('pet:debug', (_e, action: string) => {

@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { PersistedState } from '../main/store'
 import type { HealthConfig } from '../core/health'
 import type { IntakeLog } from '../core/intake'
+import type { UpdateInfo } from '../core/update'
 
 const petApi = {
   load: (): Promise<PersistedState | null> => ipcRenderer.invoke('pet:load'),
@@ -35,6 +36,10 @@ const petApi = {
   loadIntake: (): Promise<IntakeLog> => ipcRenderer.invoke('intake:load'),
   saveIntake: (log: IntakeLog): void => ipcRenderer.send('intake:save', log),
   notify: (title: string, body: string): void => ipcRenderer.send('pet:notify', { title, body }),
+  // 버전: 현재 버전 조회 / 최신 릴리스 비교 / 다운로드 링크 열기
+  getVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
+  checkUpdate: (): Promise<UpdateInfo> => ipcRenderer.invoke('app:checkUpdate'),
+  openExternal: (url: string): void => ipcRenderer.send('app:openExternal', url),
 }
 
 contextBridge.exposeInMainWorld('petApi', petApi)

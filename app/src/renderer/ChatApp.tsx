@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { CatalogItem } from '../core/catalog'
 import type { DrugInfo } from '../core/drugData'
 import type { Pet } from '../core/types'
+import type { UpdateInfo } from '../core/update'
 import type { HealthConfig } from '../core/health'
 import { DEFAULT_HEALTH_CONFIG, DEFAULT_AUX, createMed, addMed, removeMed, updateMed } from '../core/health'
 import { EMPTY_INTAKE, recordMed, recordMedDose, medAllTakenToday, medDoseTakenToday, type IntakeLog } from '../core/intake'
@@ -243,12 +244,32 @@ export default function ChatApp() {
   const [regNotice, setRegNotice] = useState('') // 중복 등록 안내(비차단) — 알럿 대신 인앱 메시지
   const [confirmDelId, setConfirmDelId] = useState<string | null>(null) // 약 삭제 인앱 2단계 확인(비차단)
   const [copied, setCopied] = useState(false) // 회원번호 복사 얼럿
+  const [version, setVersion] = useState('') // 현재 설치 버전 (설정 하단 표시)
+  const [update, setUpdate] = useState<UpdateInfo | null>(null) // 최신 릴리스 비교 결과
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
   const nextId = useRef(3)
   const feedRef = useRef<HTMLDivElement>(null)
   const modeRef = useRef(mode)
   modeRef.current = mode
   const luiStartRef = useRef<number | null>(null)
   const guiStartRef = useRef<number | null>(null)
+
+  // 버전: 앱 시작 시 현재 버전 표시, 설정 탭을 처음 열 때 최신 릴리스와 비교
+  const runUpdateCheck = (): void => {
+    setCheckingUpdate(true)
+    window.petApi
+      .checkUpdate()
+      .then((u) => { setUpdate(u); setVersion(u.current) })
+      .catch(() => { /* 네트워크 실패 등 — 아래 effect의 version만 표시 */ })
+      .finally(() => setCheckingUpdate(false))
+  }
+  useEffect(() => {
+    window.petApi.getVersion().then(setVersion).catch(() => { /* 무시 */ })
+  }, [])
+  useEffect(() => {
+    if (mode === 'settings' && !update && !checkingUpdate) runUpdateCheck()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
 
   // 집주인(내 펫)·복약 데이터 동기화
   useEffect(() => {
@@ -1180,6 +1201,34 @@ export default function ChatApp() {
                   <p className="mh__guide-note">
                     기록·데이터 관리에 쓰는 나만의 고유번호예요.<br />이름이나 연락처와는 연결되지 않아요.
                   </p>
+                </div>
+
+                {/* ── 서비스 버전 (모든 사용자에게 표시) ── */}
+                <div className="mh__card mh__ver">
+                  <div className="mh__card-head">ℹ️ 서비스 버전</div>
+                  <div className="mh__ver-row">
+                    <span>현재 버전</span>
+                    <code className="mh__ver-cur">v{version || '…'}</code>
+                  </div>
+                  {checkingUpdate ? (
+                    <p className="mh__ver-note">최신 버전 확인 중…</p>
+                  ) : update?.error ? (
+                    <div className="mh__ver-status">
+                      <p className="mh__ver-note">{update.error}</p>
+                      <button className="mh__ver-retry" onClick={runUpdateCheck}>다시 확인</button>
+                    </div>
+                  ) : update && !update.isLatest ? (
+                    <div className="mh__ver-status mh__ver-status--update">
+                      <p className="mh__ver-note">새 버전 <b>v{update.latest}</b>이 나왔어요. 업데이트를 권장해요.</p>
+                      {update.downloadUrl && (
+                        <button className="mh__ver-dl" onClick={() => window.petApi.openExternal(update.downloadUrl as string)}>
+                          ⬇ 최신 버전 다운로드
+                        </button>
+                      )}
+                    </div>
+                  ) : update ? (
+                    <p className="mh__ver-note mh__ver-note--ok">✓ 최신 버전입니다</p>
+                  ) : null}
                 </div>
 
                 {QA_MODE && (

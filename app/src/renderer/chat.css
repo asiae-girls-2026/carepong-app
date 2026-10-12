@@ -594,6 +594,29 @@ body {
 }
 .mh__member button:hover { background: #75604f; }
 
+/* 서비스 버전 카드 */
+.mh__ver-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.mh__ver-row > span { font-size: 12px; font-weight: 700; color: #6b5c3e; }
+.mh__ver-cur {
+  font-size: 13px; font-weight: 800; letter-spacing: 0.5px;
+  background: #fdf8ec; border: 1.5px solid #ecdfc6; border-radius: 8px;
+  padding: 5px 10px; color: #6b5c3e;
+}
+.mh__ver-status { margin-top: 8px; display: flex; flex-direction: column; gap: 7px; }
+.mh__ver-note { font-size: 12px; color: #8a7b5c; margin: 6px 0 0; line-height: 1.5; }
+.mh__ver-note--ok { color: #4f9d5e; font-weight: 800; }
+.mh__ver-status--update .mh__ver-note { color: #b06a10; }
+.mh__ver-dl {
+  border: none; border-radius: 999px; background: var(--peach, #e0705f); color: #fff;
+  font-size: 12px; font-weight: 800; padding: 9px 14px; cursor: pointer; align-self: flex-start;
+}
+.mh__ver-dl:hover { filter: brightness(0.95); }
+.mh__ver-retry {
+  border: 1.5px solid #ecdfc6; border-radius: 999px; background: #fdf8ec; color: #8a7b5c;
+  font-size: 11px; font-weight: 700; padding: 6px 12px; cursor: pointer; align-self: flex-start;
+}
+.mh__ver-retry:hover { background: #f6ecd5; }
+
 /* 펫 도감 — 3슬롯: 테두리(frame) 고정 + 안의 캐릭터/미스터리 이미지만 변화 */
 .mh__dexrow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
 .mh__dexslot { display: flex; flex-direction: column; align-items: center; gap: 4px; }
