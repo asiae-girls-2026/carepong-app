@@ -17,6 +17,8 @@ const BASE = API_BASE
 const V = `${BASE}/v1`
 const FLUSH_AT = '08:30' // 결정 C: 방해금지 해제 시각 = 이벤트 묶음 전송 시각
 const FLUSH_MAX = 5000 // /events/batch 한 번 최대 건수
+const FLUSH_RETRY_MS = 10 * 60 * 1000 // 전송 실패·부분전송 시 재시도 간격(10분, 큐 빌 때까지 반복)
+let retryTimer: ReturnType<typeof setTimeout> | null = null
 
 let legacyCp: string | null = null
 let token: string | null = null
@@ -132,7 +134,7 @@ export async function postWindow({
   features: Record<string, number>
   dnd?: boolean
 }): Promise<WindowResult> {
-  return call(
+  const r = await call(
     'POST',
     `${V}/windows`,
     {
@@ -146,6 +148,9 @@ export async function postWindow({
     },
     { timeoutMs: 4000 },
   )
+  // 서버가 응답함 = 네트워크 OK → 밀린 이벤트 큐가 있으면 바로 전송(아침 묶음 전송 실패분 즉시 복구)
+  if (queueHasEvents()) void flushEvents()
+  return r
 }
 
 /** 팝업 응답·체크인. trigger = postWindow 응답의 prompt_type ("morning"|"spike"|"random") 또는 "checkin"
@@ -209,7 +214,26 @@ export async function flushEvents(): Promise<{ sent: number }> {
   if (initializing) await initializing
   if (flushing) return flushing
   flushing = flushQueue().finally(() => { flushing = null })
-  return flushing
+  const res = await flushing
+  scheduleFlushRetry() // 실패·부분전송으로 큐가 남아있으면 10분 뒤 자동 재시도(아침 서버 기동 중 실패 복구)
+  return res
+}
+
+// 큐에 보낼 이벤트가 남아있나
+function queueHasEvents(): boolean {
+  try {
+    return !!queueFile && fs.existsSync(queueFile) && fs.readFileSync(queueFile, 'utf8').split('\n').filter(Boolean).length > 0
+  } catch {
+    return false
+  }
+}
+// 큐가 남아있으면 10분 뒤 재시도 예약 — 중복 예약 방지, 큐가 빌 때까지 반복
+function scheduleFlushRetry(): void {
+  if (retryTimer || !queueHasEvents()) return
+  retryTimer = setTimeout(async () => {
+    retryTimer = null
+    await flushEvents()
+  }, FLUSH_RETRY_MS)
 }
 
 async function flushQueue(): Promise<{ sent: number }> {

@@ -1,7 +1,7 @@
 {
   "name": "care-pong",
   "private": true,
-  "version": "0.1.8",
+  "version": "0.1.6",
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
@@ -65,8 +65,8 @@
     },
     "extraResources": [
       {
-        "from": "resources/collector.exe",
-        "to": "collector.exe"
+        "from": "resources/collector",
+        "to": "collector"
       }
     ]
   }
