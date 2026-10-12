@@ -926,6 +926,15 @@ export default function ChatApp() {
                         </div>
                       )
                     })}
+                    {/* 미공개 자리 — 추후 추가될 3번째 캐릭터(지금은 항상 미스터리 박스) */}
+                    <div key="future" className="mh__dexslot">
+                      <div className="mh__dexart">
+                        <img className="mh__deximg mh__deximg--myst" src={dexImg('mystery')} alt="미공개" draggable={false} />
+                        <img className="mh__dexframe" src={dexImg('frame')} alt="" draggable={false} />
+                        <span className="mh__dexno">{(pet?.speciesOrder?.length ?? DEFAULT_DEX_ORDER.length) + 1}</span>
+                      </div>
+                      <small className="mh__dexname">???</small>
+                    </div>
                   </div>
                   <p className="mh__empty">레벨 5가 되면 랜덤으로 환생해요.<br />미스테리 펫을 모아보세요.</p>
                 </div>
