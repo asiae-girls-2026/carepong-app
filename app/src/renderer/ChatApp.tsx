@@ -1193,24 +1193,14 @@ export default function ChatApp() {
                       <button onClick={() => window.petApi.debug('heartnext')}>방꾸미기 다음단계</button>
                       <button
                         className="mh__qa-reset"
-                        title="랜덤 캐릭터 Lv.1 · 1세대부터 완전히 처음 상태로 (이름 유지)"
+                        title="처음 설치처럼 — 데이터 수집 안내 + 랜덤 캐릭터 + 이름 설정부터 완전 초기화 (랜덤 캐릭터 확인용)"
                         onClick={() => {
-                          if (confirm('완전 초기화할까요?\n랜덤 캐릭터 Lv.1 · 1세대로 돌아가고 누적기록·방꾸미기·도감이 모두 리셋돼요.')) {
-                            window.petApi.debug('resetfirst')
-                            setLocalHearts(0)
-                          }
-                        }}
-                      >완전 초기화<br />(랜덤 캐릭터 Lv.1)</button>
-                      <button
-                        className="mh__qa-reset"
-                        title="처음 설치처럼 — 데이터 수집 안내 + 랜덤 캐릭터 + 이름 설정부터 (랜덤 캐릭터 확인용)"
-                        onClick={() => {
-                          if (confirm('처음 설치처럼 시작할까요?\n데이터 수집 안내가 다시 뜨고, 랜덤 캐릭터로 이름 설정부터 새로 시작해요.\n(누적기록·방꾸미기·도감 전부 리셋)')) {
+                          if (confirm('처음 설치처럼 완전 초기화할까요?\n데이터 수집 안내가 다시 뜨고, 랜덤 캐릭터로 이름 설정부터 새로 시작해요.\n(누적기록·방꾸미기·도감 전부 리셋)')) {
                             window.petApi.debug('freshinstall')
                             setLocalHearts(0)
                           }
                         }}
-                      >처음 설치처럼<br />(안내+이름부터)</button>
+                      >완전 초기화<br />(처음 설치처럼)</button>
                     </div>
                   </div>
                 )}
