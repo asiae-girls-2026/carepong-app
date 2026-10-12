@@ -1191,6 +1191,7 @@ export default function ChatApp() {
                       <button onClick={() => window.petApi.debug('levelup')}>레벨업</button>
                       <button onClick={() => { window.petApi.debug('heartreset'); setLocalHearts(0) }}>하트 초기화</button>
                       <button onClick={() => window.petApi.debug('heartnext')}>방꾸미기 다음단계</button>
+                      <button onClick={() => window.petApi.debug('togglechar')}>캐릭터 전환<br />(냥냥퐁↔용용퐁)</button>
                       <button
                         className="mh__qa-reset"
                         title="처음 설치처럼 — 데이터 수집 안내 + 랜덤 캐릭터 + 이름 설정부터 완전 초기화 (랜덤 캐릭터 확인용)"

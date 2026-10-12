@@ -1042,6 +1042,11 @@ export default function App() {
           const order = randomBetaOrder()
           return createNewPet('퐁이', order[0], Date.now(), order)
         }
+        if (action === 'togglechar') {
+          // QA: 현재 캐릭터 즉시 전환(냥냥퐁↔용용퐁) — 드래곤 에셋/렌더 확인용
+          const next = prev.creature === 'cat' ? 'dragon' : 'cat'
+          return { ...prev, creature: next, speciesOrder: prev.speciesOrder ?? ['cat', 'dragon'] }
+        }
         if (action === 'heartnext') {
           // QA 방꾸미기 테스트 — 누적 하트를 다음 해금 단계로 점프
           const thresholds = [10, 30, 60, 100, 150, 210, 280, 340, 400]
@@ -1248,7 +1253,7 @@ export default function App() {
       )}
       {naming && (
         <div className="invite-prompt" onPointerDown={(e) => e.stopPropagation()}>
-          <div className="invite-prompt__text">🐣 {pet.generation}번째 아이가 태어났어요! 이름을 지어주세요</div>
+          <div className="invite-prompt__text">🐣 {({ cat: '냥냥퐁', dragon: '용용퐁' } as Record<string, string>)[pet.creature] ?? pet.creature} · {pet.generation}번째 아이가 태어났어요! 이름을 지어주세요</div>
           <input
             className="name-input"
             placeholder={`이름 (예: ${pet.name || '퐁이'})`}
