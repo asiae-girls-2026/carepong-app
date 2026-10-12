@@ -13,7 +13,7 @@ import { startOfLocalDay, currentDueTime } from '../core/scheduler'
 import { replyEmpathy } from '../core/empathy'
 import { parseTimes, tryParseRegister, registerSummary, type ParsedTime } from '../core/medLui'
 import { normalizeAncestors, xpProgress, isMaxed } from '../core/progression'
-import { spriteUrl, poseUrl, roomBgFor, hasPoses, dexImg } from './sprites'
+import { spriteUrl, poseUrl, roomBgFor, hasPoses, dexImg, creatureScale } from './sprites'
 
 // 펫 도감 — 베타 2종. 번호(순서)는 '랜덤 첫 등장 캐릭터가 1번' = pet.speciesOrder 기준
 const BETA_NAMES: Record<string, string> = { cat: '냥냥퐁', dragon: '용용퐁' }
@@ -915,7 +915,7 @@ export default function ChatApp() {
                         <div key={creature} className={`mh__dexslot${acquired ? ' mh__dexslot--got' : ''}`}>
                           <div className="mh__dexart">
                             {acquired && url ? (
-                              <img className="mh__deximg" src={url} alt={nm} draggable={false} />
+                              <img className={`mh__deximg${creatureScale(creature) !== 1 ? ' mh__deximg--sq' : ''}`} src={url} alt={nm} draggable={false} />
                             ) : (
                               <img className="mh__deximg mh__deximg--myst" src={dexImg('mystery')} alt="미공개" draggable={false} />
                             )}

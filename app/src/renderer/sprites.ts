@@ -38,6 +38,14 @@ export function petPixelSize(_stage: number): number {
   return 126 // 위젯 펫 크기 — 전 레벨(1~4)을 Lv.5 크기로 통일(사용자 요청)
 }
 
+// 캐릭터별 표시 배율. 원본 아트의 여백 차이 보정용.
+// 고양이(cat)는 내용에 딱 맞게 크롭(여백 거의 없음)된 반면, 드래곤(dragon)은 512×512 정사각형이라
+// 같은 박스에 넣으면 몸통이 더 꽉 차 커 보인다 → 드래곤만 줄여 고양이와 체감 크기를 맞춘다.
+const CREATURE_SCALE: Record<string, number> = { dragon: 0.65 }
+export function creatureScale(creature: string): number {
+  return CREATURE_SCALE[creature] ?? 1
+}
+
 // ── 포즈 시스템 (pets/<creature>/<level>/<pose>.png) ──
 // 레벨=아이템 단계(1=기본·2=턱받이·3=리본 …). 포즈 파일명은 레벨 무관 동일.
 const poseModules = import.meta.glob('./assets/pets/*/*/*.png', {

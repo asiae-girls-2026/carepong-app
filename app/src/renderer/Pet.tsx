@@ -1,6 +1,6 @@
 import type { AnimationState } from './animation'
 import type { Stats } from '../core/types'
-import { spriteUrl, poseUrl, hasPoses, petPixelSize, isHybrid } from './sprites'
+import { spriteUrl, poseUrl, hasPoses, petPixelSize, isHybrid, creatureScale } from './sprites'
 
 // 교배종 스프라이트가 세로로 찌부됨 → 가로를 줄여 정비율 보정
 const HYBRID_SQUISH = 0.85
@@ -39,6 +39,7 @@ export default function Pet({
   const usePose = !!pose && hasPoses(creature)
   const url = usePose ? poseUrl(creature, stage, pose as string) : spriteUrl(creature, stage)
   const size = petPixelSize(stage)
+  const imgSize = size * creatureScale(creature) // 캐릭터별 여백 보정(드래곤만 축소). 박스(size)는 유지, 이미지만 축소
   // 포즈 모드: 이미지 자체가 동작을 담으므로 CSS 모션·좌우반전 없음(walk_l/walk_r로 방향 표현)
   const motion = usePose ? 'pose' : chewing ? 'eat' : moving ? 'walk' : blink ? 'blink' : 'still'
   const squish = usePose ? 1 : isHybrid(creature) ? HYBRID_SQUISH : 1
@@ -63,7 +64,7 @@ export default function Pet({
             src={url}
             alt={creature}
             draggable={false}
-            style={{ width: size, height: size }}
+            style={{ width: imgSize, height: imgSize }}
           />
         )}
       </div>
