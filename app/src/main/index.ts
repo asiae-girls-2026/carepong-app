@@ -198,6 +198,12 @@ ipcMain.on('pet:notify', (_e, { title, body }: { title: string; body: string }) 
 })
 // 패널 QA 디버그 → 오버레이
 ipcMain.on('pet:debug', (_e, action: string) => {
+  if (action === 'freshinstall') {
+    // QA: 처음 설치처럼 — 데이터 수집 안내 다시 띄우고(확인 후) 랜덤 캐릭터 + 이름 설정부터
+    showCollectNotice(true)
+    win?.webContents.send('pet:debugForward', 'freshinstall')
+    return
+  }
   win?.webContents.send('pet:debugForward', action)
 })
 ipcMain.on('pet:showContextMenu', (_e, state: { dnd: boolean; canRebirth?: boolean }) => {
@@ -242,23 +248,27 @@ app.on('second-instance', () => {
   }
 })
 
+// 데이터 수집 안내 팝업 — 첫 실행(미고지) 또는 QA 강제(force=true) 시 노출
+function showCollectNotice(force = false): void {
+  const health = loadHealth()
+  if (!force && health.noticeShown) return
+  dialog.showMessageBoxSync({
+    type: 'info',
+    title: '케어퐁 — 데이터 수집 안내',
+    message: '케어퐁은 스트레스 감지를 위해 키보드·마우스 사용 패턴만 분석해요.',
+    detail:
+      '· 실제 입력한 글자·비밀번호·화면 내용은 저장하지 않아요 (횟수·타이밍 패턴만).\n' +
+      '· 감지·수집은 평일 업무시간(08:30~18:30)에만 이뤄져요.\n' +
+      '· 모든 설정·기록은 이 컴퓨터에만 로컬 저장돼요 (서버 계정 없음).',
+    buttons: ['확인'],
+    noLink: true,
+  })
+  saveHealth({ ...loadHealth(), noticeShown: true })
+}
+
 app.whenReady().then(async () => {
   // ── 첫 실행 수집 안내(1#2) — 이름 입력(이름짓기)보다 먼저. [확인]을 눌러야 펫 창이 뜬다 ──
-  const health = loadHealth()
-  if (!health.noticeShown) {
-    dialog.showMessageBoxSync({
-      type: 'info',
-      title: '케어퐁 — 데이터 수집 안내',
-      message: '케어퐁은 스트레스 감지를 위해 키보드·마우스 사용 패턴만 분석해요.',
-      detail:
-        '· 실제 입력한 글자·비밀번호·화면 내용은 저장하지 않아요 (횟수·타이밍 패턴만).\n' +
-        '· 감지·수집은 평일 업무시간(08:30~18:30)에만 이뤄져요.\n' +
-        '· 모든 설정·기록은 이 컴퓨터에만 로컬 저장돼요 (서버 계정 없음).',
-      buttons: ['확인'],
-      noLink: true,
-    })
-    saveHealth({ ...health, noticeShown: true })
-  }
+  showCollectNotice()
 
   createWindow()
   createTray()
@@ -266,7 +276,7 @@ app.whenReady().then(async () => {
   initDrugSearch()
 
   // ── 서버 전송 모듈 초기화 (호출위치표 A) — CP 번호는 앱이 로컬 발급한 회원번호 ──
-  const cpNumber = health.memberId ?? 'CP-UNSET'
+  const cpNumber = loadHealth().memberId ?? 'CP-UNSET'
   try {
     await api.init({
       cpNumber,

@@ -1200,7 +1200,17 @@ export default function ChatApp() {
                             setLocalHearts(0)
                           }
                         }}
-                      >완전 초기화<br />(검정고양이 Lv.1)</button>
+                      >완전 초기화<br />(랜덤 캐릭터 Lv.1)</button>
+                      <button
+                        className="mh__qa-reset"
+                        title="처음 설치처럼 — 데이터 수집 안내 + 랜덤 캐릭터 + 이름 설정부터 (랜덤 캐릭터 확인용)"
+                        onClick={() => {
+                          if (confirm('처음 설치처럼 시작할까요?\n데이터 수집 안내가 다시 뜨고, 랜덤 캐릭터로 이름 설정부터 새로 시작해요.\n(누적기록·방꾸미기·도감 전부 리셋)')) {
+                            window.petApi.debug('freshinstall')
+                            setLocalHearts(0)
+                          }
+                        }}
+                      >처음 설치처럼<br />(안내+이름부터)</button>
                     </div>
                   </div>
                 )}

@@ -1037,6 +1037,11 @@ export default function App() {
           const order = randomBetaOrder()
           return createNewPet(prev.name, order[0], Date.now(), order)
         }
+        if (action === 'freshinstall') {
+          // QA: 처음 설치처럼 — 랜덤 캐릭터로 새로 시작(이름도 초기화 → 이름 설정 프롬프트)
+          const order = randomBetaOrder()
+          return createNewPet('퐁이', order[0], Date.now(), order)
+        }
         if (action === 'heartnext') {
           // QA 방꾸미기 테스트 — 누적 하트를 다음 해금 단계로 점프
           const thresholds = [10, 30, 60, 100, 150, 210, 280, 340, 400]
@@ -1050,6 +1055,16 @@ export default function App() {
       })
       if (action === 'rebirth') doRebirth()
       if (action === 'resetfirst') { rebirthRef.current = false; setRebirthPrompt(false) }
+      if (action === 'freshinstall') {
+        // 첫 설치처럼 — 환생/프롬프트 상태 리셋 후 이름 설정 프롬프트 띄우기
+        rebirthRef.current = false
+        setRebirthPrompt(false)
+        setNameInput('')
+        namingRef.current = true
+        setNaming(true)
+        interactive.current = true
+        window.petApi.setClickThrough(false)
+      }
       setTimeout(saveNow, 0) // QA/디버그 변경 즉시 저장 — 미니홈(2초 폴링) 반영
     })
     return off
