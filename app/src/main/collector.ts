@@ -12,6 +12,9 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
 import fs from 'node:fs'
 import readline from 'node:readline'
+import crypto from 'node:crypto'
+import zlib from 'node:zlib'
+import { uploadRawBatch } from './api'
 
 export interface CollectorLine {
   window_start: string
@@ -20,6 +23,13 @@ export interface CollectorLine {
 }
 
 let child: ChildProcess | null = null
+let uploaderBusy = false
+let lastAttempt = new Map<string, { next: number; backoff: number }>()
+let collectorCpNumber: string | null = null
+/** 로컬 세션 라벨 전용. 인증은 Electron Bearer 토큰으로 수행. */
+export function setCollectorCpNumber(value: string | null): void {
+  collectorCpNumber = value && /^CP-[A-Za-z0-9_-]+$/.test(value) ? value : null
+}
 let paused = false // 사용자가 방해금지 수동 토글 / 수집 일시중지 했을 때
 
 function exePath(): string {
@@ -44,7 +54,8 @@ export function startCollector(onWindow: (w: CollectorLine) => void, windowSec =
   } catch {
     /* 디렉토리 생성 실패해도 수집기 쪽에서 처리 */
   }
-  const args = ['--raw-dir', rawDir]
+  const args = ['--raw-dir', rawDir, '--spool-only']
+  if (collectorCpNumber) args.push('--user-id', collectorCpNumber)
   if (windowSec !== 60) args.push('--window', String(windowSec))
   child = spawn(exe, args, {
     windowsHide: true,
@@ -83,6 +94,138 @@ export function setCollectorPaused(on: boolean): void {
   paused = on
 }
 
+/** Raw uploader lives in Electron: continues while collection is stopped. */
+const rawDirPath = (): string => path.join(app.getPath('userData'), 'carepong_raw')
+const spoolDirPath = (): string => path.join(rawDirPath(), 'spool')
+const KST_OFFSET = 9 * 60 * 60 * 1000
+// Calendar-day retention avoids deleting Thursday data before the next Tuesday startup.
+const UNSENT_RETENTION_DAYS = 7
+const DAY_MS = 24 * 60 * 60 * 1000
+const kstDate = (ms: number): string => new Date(ms + KST_OFFSET).toISOString().slice(0, 10)
+const kstDay = (ms: number): number => new Date(ms + KST_OFFSET).getUTCDay()
+const kstMinute = (ms: number): number => {
+  const d = new Date(ms + KST_OFFSET)
+  return d.getUTCHours() * 60 + d.getUTCMinutes()
+}
+const eventMillis = (ts: unknown): number => {
+  if (typeof ts === 'number') return ts * 1000
+  if (typeof ts === 'string') return Date.parse(ts)
+  return NaN
+}
+function appendDeletionLog(info: Record<string, unknown>): boolean {
+  try {
+    fs.appendFileSync(path.join(rawDirPath(), 'raw_deletion_audit.jsonl'), JSON.stringify(info) + '\n', 'utf8')
+    return true
+  } catch (e) {
+    console.warn('[raw-upload] 삭제 감사로그 기록 실패:', e)
+    return false
+  }
+}
+function recoverClosedSpool(): void {
+  if (collectorRunning()) return // never seal a file owned by a running collector
+  const dir = spoolDirPath()
+  if (!fs.existsSync(dir)) return
+  for (const name of fs.readdirSync(dir).filter(n => n.endsWith('.ndjson.open'))) {
+    const original = path.join(dir, name)
+    const output = original.slice(0, -'.open'.length) + '.gz'
+    try {
+      const raw = fs.readFileSync(original)
+      if (raw.length === 0) { fs.unlinkSync(original); continue }
+      const temp = output + '.part'
+      fs.writeFileSync(temp, zlib.gzipSync(raw))
+      fs.renameSync(temp, output)
+      fs.unlinkSync(original)
+    } catch (e) { console.warn('[raw-upload] 미완료 파일 복구 실패:', name, e) }
+  }
+}
+async function flushRawQueue(): Promise<void> {
+  if (uploaderBusy) return
+  uploaderBusy = true
+  try {
+    recoverClosedSpool()
+    const dir = spoolDirPath()
+    if (!fs.existsSync(dir)) return
+    const names = fs.readdirSync(dir).filter(n => n.endsWith('.ndjson.gz')).sort()
+    for (const name of names) {
+      const file = path.join(dir, name)
+      if (!fs.existsSync(file)) continue
+      const now = Date.now()
+      const retry = lastAttempt.get(name)
+      if (retry && now < retry.next) continue
+      let compressed: Buffer, records: any[], firstMs: number, date: string
+      try {
+        compressed = fs.readFileSync(file)
+        records = zlib.gunzipSync(compressed).toString('utf8').split('\n').filter(Boolean).map(line => JSON.parse(line))
+        if (!records.length) throw new Error('empty batch')
+        const times = records.map(r => eventMillis(r.ts))
+        if (times.some(t => !Number.isFinite(t))) throw new Error('invalid timestamp')
+        firstMs = times.reduce((a, b) => Math.min(a, b), Number.POSITIVE_INFINITY)
+        date = kstDate(firstMs)
+        if (times.some(t => kstDate(t) !== date)) throw new Error('batch crosses KST date')
+      } catch (e) {
+        console.warn('[raw-upload] 데이터 검사 실패; 삭제하지 않음:', name, e)
+        continue
+      }
+      const batchId = name.slice(0, -'.ndjson.gz'.length)
+      const reason = compressed.length > 200 * 1024 * 1024 ? 'FILE_OVER_200MB' :
+        now - firstMs >= UNSENT_RETENTION_DAYS * DAY_MS ? 'UNSENT_OVER_7_DAYS' : null
+      if (reason) {
+        if (appendDeletionLog({ event: 'raw_file_deleted', reason, batch_id: batchId,
+          size_bytes: compressed.length, data_date: date, deleted_at: new Date().toISOString(),
+          upload_status: 'pending', s3_confirmed: false })) {
+          fs.unlinkSync(file)
+          lastAttempt.delete(name)
+        }
+        continue
+      }
+      // Upload worker is independent of collection hours and backend uptime.
+      // Friday sealed batches: 17:30 first segment, 18:30 remaining segment.
+      // Other days: midnight following event date + 36 hours.
+      const eligible = kstDay(firstMs) === 5
+        ? (now >= Date.parse(date + (kstMinute(firstMs) < 17 * 60 + 30 ? 'T17:30:00+09:00' : 'T18:30:00+09:00')))
+        : (now >= Date.parse(date + 'T00:00:00+09:00') + DAY_MS + 36 * 60 * 60 * 1000)
+      if (!eligible) continue
+      const parts = batchId.split('__')
+      if (parts.length !== 3 || !['ev', 'wd'].includes(parts[1])) {
+        console.warn('[raw-upload] 배치 이름 형식 오류; 삭제하지 않음:', name)
+        continue
+      }
+      // ML Raw 계약: 이벤트 행은 (ts, session, kind, value), 다이내믹스는 km-raw-v1.
+      const session = parts[0]
+      const eventKinds = new Set(['k_char', 'k_special', 'k_dir', 'k_err', 'k_space', 'k_shortcut', 'm_left', 'm_right', 'm_scroll', 'm_move'])
+      const valid = parts[1] === 'ev'
+        ? records.every(r => r && typeof r.ts === 'number' && r.session === session &&
+            eventKinds.has(r.kind) && (r.value == null || (typeof r.value === 'number' && Number.isFinite(r.value))) &&
+            (r.kind !== 'm_move' || (typeof r.value === 'number' && r.value >= 0)))
+        : records.every(r => r && r.schema === 'km-raw-v1' &&
+            typeof r.window_start === 'number' && typeof r.window_sec === 'number' &&
+            r.keyboard && typeof r.keyboard === 'object' && r.mouse && typeof r.mouse === 'object')
+      if (!valid) {
+        console.warn('[raw-upload] ML Raw 스키마 불일치; 파일 유지:', name)
+        continue
+      }
+      const meta = {
+        batch_id: batchId, stream: parts[1],
+        schema: parts[1] === 'wd' ? 'km-raw-v1' : 'km-ev-v1',
+        session: parts[0], event_date_kst: date, count: records.length,
+        bytes: compressed.length, sha256: crypto.createHash('sha256').update(compressed).digest('hex'),
+        content_encoding: 'gzip', ts_first: records[0].ts, ts_last: records[records.length - 1].ts,
+        collector_version: '0.2.3',
+      }
+      const ok = await uploadRawBatch(meta, compressed)
+      if (ok) {
+        fs.unlinkSync(file)
+        lastAttempt.delete(name)
+        console.log('[raw-upload] S3 ACK 후 로컬 삭제:', batchId)
+      } else {
+        const backoff = Math.min((retry?.backoff || 15) * 2, 600)
+        lastAttempt.set(name, { next: Date.now() + backoff * 1000, backoff })
+      }
+    }
+  } catch (e) { console.warn('[raw-upload] Queue 처리 실패:', e) }
+  finally { uploaderBusy = false }
+}
+
 /** "HH:MM" 두 시각 사이인지 (자정을 넘는 구간 18:30~08:30 도 처리) */
 export function inQuietHours(now: Date, start = '18:30', end = '08:30'): boolean {
   const toMin = (s: string): number => {
@@ -112,6 +255,8 @@ export function scheduleCollector(
     if (!shouldRun && collectorRunning()) stopCollector()
   }
   tick()
+  void flushRawQueue()
   setInterval(tick, 60 * 1000)
+  setInterval(() => void flushRawQueue(), 30 * 1000)
   app.on('before-quit', stopCollector)
 }

@@ -14,6 +14,7 @@ import type { HealthConfig } from '../core/health'
 import type { IntakeLog } from '../core/intake'
 import { initStressManager } from './stress'
 import { initDrugSearch } from './drugSearch'
+import { setCollectorCpNumber } from './collector'
 import * as api from './api'
 
 // 펫 상태 백업 매핑 (호출위치표 E: putPet) — 누적 하트로 가구 단계 산출(기획서 방꾸미기 언락 임계)
@@ -316,9 +317,10 @@ function showCollectNotice(force = false): void {
     title: '케어퐁 — 데이터 수집 안내',
     message: '케어퐁은 스트레스 감지를 위해 키보드·마우스 사용 패턴만 분석해요.',
     detail:
-      '· 실제 입력한 글자·비밀번호·화면 내용은 저장하지 않아요 (횟수·타이밍 패턴만).\n' +
+      '· 실제 입력한 글자·비밀번호·화면 내용은 저장하지 않아요 (키·마우스의 횟수·타이밍 패턴만).\n' +
       '· 감지·수집은 평일 업무시간(08:30~18:30)에만 이뤄져요.\n' +
-      '· 모든 설정·기록은 이 컴퓨터에만 로컬 저장돼요 (서버 계정 없음).',
+      '· 수집한 사용 패턴은 익명 식별번호로 안전하게 서버에 전송돼 스트레스 감지·서비스 개선에 쓰여요. 이름·연락처 등 개인정보와는 연결되지 않아요.\n' +
+      '· 펫·설정 등 앱 기록은 이 컴퓨터에 저장돼요.',
     buttons: ['확인'],
     noLink: true,
   })
@@ -331,11 +333,13 @@ app.whenReady().then(async () => {
 
   createWindow()
   createTray()
+  // 수집기 시작 전에 등록된 CP 회원번호를 로컬 세션 라벨로 전달한다(올바른 CP-… 형식만 --user-id로 전달). (DA 인계)
+  const cpNumber = loadHealth().memberId ?? 'CP-UNSET'
+  setCollectorCpNumber(cpNumber)
   initStressManager()
   initDrugSearch()
 
   // ── 서버 전송 모듈 초기화 (호출위치표 A) — CP 번호는 앱이 로컬 발급한 회원번호 ──
-  const cpNumber = loadHealth().memberId ?? 'CP-UNSET'
   try {
     await api.init({
       cpNumber,

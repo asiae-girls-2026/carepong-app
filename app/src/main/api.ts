@@ -293,3 +293,30 @@ export const putPet = (pet: Record<string, unknown>): Promise<any> =>
     return null
   })
 export const getConfig = (): Promise<any> => call('GET', `${V}/config`)
+
+/** Raw batch: only Backend-confirmed S3 persistence counts as an ACK. */
+export async function uploadRawBatch(meta: Record<string, unknown>, compressed: Buffer): Promise<boolean> {
+  if (!token) return false
+  const ctrl = new AbortController()
+  const timeout = setTimeout(() => ctrl.abort(), 60000)
+  try {
+    const response = await fetch(`${V}/raw/batches`, {
+      method: 'POST', signal: ctrl.signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/gzip',
+        'X-Raw-Batch-Meta': Buffer.from(JSON.stringify(meta), 'utf8').toString('base64url'),
+      },
+      body: new Uint8Array(compressed),
+    })
+    if (!response.ok) return false
+    const ack = await response.json() as { stored?: boolean; already_exists?: boolean; batch_id?: string; sha256?: string }
+    return (ack.stored === true || ack.already_exists === true) &&
+      ack.batch_id === meta.batch_id && ack.sha256 === meta.sha256
+  } catch (e) {
+    console.warn('[raw-upload] Backend 통신 실패:', (e as Error).message)
+    return false
+  } finally {
+    clearTimeout(timeout)
+  }
+}
