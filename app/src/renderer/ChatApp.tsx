@@ -697,7 +697,7 @@ export default function ChatApp() {
           {/* 이전 펫은 방에 표시하지 않음 — 펫 도감에서 수집(기획서 7번) */}
           <div className="mh__petspot">
             {petImg ? (
-              <img className="mh__pet" src={petImg} alt={petName} draggable={false} />
+              <img className={`mh__pet${creatureScale(pet?.creature ?? 'cat') !== 1 ? ' mh__pet--sq' : ''}`} src={petImg} alt={petName} draggable={false} />
             ) : (
               <span className="mh__pet-fallback">🐱</span>
             )}

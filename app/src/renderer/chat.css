@@ -118,6 +118,8 @@ body {
   animation: hostBob 2.4s ease-in-out infinite;
 }
 .mh__pet-fallback { position: relative; font-size: 42px; }
+/* 정사각형 원본(드래곤 등) — 고양이와 체감 크기 맞춤(바닥 기준은 petspot가 잡아줌) */
+.mh__pet--sq { width: 77px; height: 77px; }
 @keyframes hostBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 
 /* 문패 */
