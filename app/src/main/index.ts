@@ -1,6 +1,8 @@
 import { app, BrowserWindow, ipcMain, screen, Menu, Notification, Tray, nativeImage, dialog, shell } from 'electron'
 import type { UpdateInfo } from '../core/update'
 import { join } from 'path'
+import { existsSync } from 'node:fs'
+import { spawn } from 'node:child_process'
 import {
   loadState,
   saveState,
@@ -253,8 +255,29 @@ ipcMain.handle('app:checkUpdate', async (): Promise<UpdateInfo> => {
     clearTimeout(t)
   }
 })
+// 다운로드 링크는 가능하면 Chrome으로 연다 — Edge의 SmartScreen 경고 흐름이 번잡하다는 팀 피드백.
+// Chrome이 설치돼 있으면 Chrome으로, 없으면 기본 브라우저로 폴백. (서명 없는 설치파일 경고 자체는 코드서명 전까지 남음)
+function openDownloadUrl(url: string): void {
+  if (process.platform === 'win32') {
+    const candidates = [
+      join(process.env['ProgramFiles'] ?? 'C:\\Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      join(process.env['LOCALAPPDATA'] ?? '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    ]
+    const chrome = candidates.find((p) => { try { return !!p && existsSync(p) } catch { return false } })
+    if (chrome) {
+      try {
+        spawn(chrome, [url], { detached: true, stdio: 'ignore' }).unref()
+        return
+      } catch {
+        /* Chrome 실행 실패 시 기본 브라우저로 폴백 */
+      }
+    }
+  }
+  void shell.openExternal(url)
+}
 ipcMain.on('app:openExternal', (_e, url: string) => {
-  if (typeof url === 'string' && /^https:\/\//i.test(url)) void shell.openExternal(url)
+  if (typeof url === 'string' && /^https:\/\//i.test(url)) openDownloadUrl(url)
 })
 // 패널 QA 디버그 → 오버레이
 ipcMain.on('pet:debug', (_e, action: string) => {
