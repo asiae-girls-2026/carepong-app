@@ -164,7 +164,21 @@ function createWindow(): void {
   } else {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  // 펫이 가끔 다른 창 뒤로 밀리는 문제 보정 — 다른 창/전체화면 앱이 뜰 때 Windows가 최상단 상태를
+  // 떨어뜨리는 경우가 있어, 2초마다 최상단을 다시 확정한다. (포커스는 뺏지 않음)
+  keepOnTopTimer = setInterval(() => {
+    if (!win || win.isDestroyed()) return
+    win.setAlwaysOnTop(true, 'screen-saver')
+  }, 2000)
+  win.on('closed', () => {
+    if (keepOnTopTimer) {
+      clearInterval(keepOnTopTimer)
+      keepOnTopTimer = null
+    }
+  })
 }
+let keepOnTopTimer: ReturnType<typeof setInterval> | null = null
 
 ipcMain.handle('pet:load', (): PersistedState | null => loadState())
 let lastPetBackupKey: string | null = null // 값이 바뀔 때만 서버 전송(15초마다 과다 호출 방지)

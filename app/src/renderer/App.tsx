@@ -50,8 +50,9 @@ import { DEFAULT_HEALTH_CONFIG, TIMING_LABEL, MISSED_DOSE_GUIDE, type HealthConf
 import { petPixelSize, spriteUrl, poseUrl } from './sprites'
 
 type Reminder = { kind: ReminderKind; id: string; label: string; alarmId?: string; shownAt?: string }
-const SNOOZE_MS = 30 * 60 * 1000
+const SNOOZE_MS = 10 * 60 * 1000 // 놓치거나 '나중에' 누르면 10분 뒤 재알림(고정) — 확인할 때까지 반복. 확인하면 그때부터 설정 간격 재시작
 const REMINDER_AUTO_MS = 30 * 1000 // 무응답 시 자동 닫힘(벌점 없음 · 클릭 가로채기 방지)
+const REMINDER_AUTO_MED_MS = 10 * 60 * 1000 // 복약은 약 먹고 돌아와 확인하는 경우가 많아 길게(10분). 확인 전에 꺼지는 문제 방지
 
 const WANDER_MS = 33
 const IDLE_SPEED = 0.8
@@ -459,6 +460,16 @@ export default function App() {
     return off
   }, [])
 
+  // 아침 인사 — 08:30 이후 첫 활동 30분 후(메인이 하루 1회 전송) 펫 말풍선으로 1회
+  useEffect(() => {
+    const off = window.careApi.onMorningGreet(() => {
+      if (namingRef.current || rebirthRef.current) return // 이름 설정·환생 중엔 생략
+      showBubble('좋은 아침이에요 ☀️', 6000)
+    })
+    return off
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // 레벨업 연출 기준값
   useEffect(() => {
     if (!pet) return
@@ -547,7 +558,8 @@ export default function App() {
     // 모든 알람(약 포함)은 말풍선 영역에 마우스를 올렸을 때만 버튼이 눌린다(영역 기반 onMove).
     // → 오버레이가 전체 화면을 잡지 않아 미니홈·바탕화면을 막지 않음.
     if (reminderAutoTimer.current) clearTimeout(reminderAutoTimer.current)
-    reminderAutoTimer.current = setTimeout(missReminder, REMINDER_AUTO_MS)
+    // 복약은 길게(10분) — 자리 비우고 돌아와 '먹었어요'를 눌러도 닫히지 않게. 그 외는 30초.
+    reminderAutoTimer.current = setTimeout(missReminder, r.kind === 'medication' ? REMINDER_AUTO_MED_MS : REMINDER_AUTO_MS)
   }
   const scanDue = (): void => {
     if (reminderRef.current || namingRef.current || rebirthRef.current) return

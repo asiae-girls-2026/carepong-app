@@ -14,8 +14,9 @@ const store = new Store<{
   state: PersistedState | null
   health: HealthConfig
   intake: IntakeLog
+  morningGreetDay: number | null // 아침 인사(좋은 아침이에요 ☀️) 마지막으로 띄운 날(로컬 날짜키) — 하루 1회 보장
 }>({
-  defaults: { state: null, health: DEFAULT_HEALTH_CONFIG, intake: EMPTY_INTAKE },
+  defaults: { state: null, health: DEFAULT_HEALTH_CONFIG, intake: EMPTY_INTAKE, morningGreetDay: null },
 })
 
 export function loadState(): PersistedState | null {
@@ -42,4 +43,10 @@ export function loadIntake(): IntakeLog {
 }
 export function saveIntake(log: IntakeLog): void {
   store.set('intake', log)
+}
+export function loadMorningGreetDay(): number | null {
+  return store.get('morningGreetDay')
+}
+export function saveMorningGreetDay(day: number): void {
+  store.set('morningGreetDay', day)
 }

@@ -78,6 +78,12 @@ const careApi = {
     ipcRenderer.on('stress:calmed', handler)
     return () => ipcRenderer.removeListener('stress:calmed', handler)
   },
+  // 아침 인사 — 08:30 이후 첫 활동 30분 후 메인이 하루 1회 보냄
+  onMorningGreet: (cb: () => void): (() => void) => {
+    const handler = (): void => cb()
+    ipcRenderer.on('morning:greet', handler)
+    return () => ipcRenderer.removeListener('morning:greet', handler)
+  },
   // ── 서버 전송(민서 api.js) 호출 브리지 — 렌더러 동작을 메인으로 넘겨 기록/전송 ──
   // 로컬 큐 이벤트 (호출위치표 C·D): 08:30/앱시작에 묶여 자동 전송
   logEvent: (event: string, screen: string | null, props?: Record<string, unknown>): void =>

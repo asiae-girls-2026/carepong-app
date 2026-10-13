@@ -6,7 +6,12 @@ import crypto from 'node:crypto'
 import { createStressTracker, STRESS_THRESHOLD, type StressSnapshot } from '../core/stress'
 import * as api from './api'
 import { scheduleCollector, setCollectorPaused, type CollectorLine } from './collector'
-import { loadHealth } from './store'
+import { loadHealth, loadMorningGreetDay, saveMorningGreetDay } from './store'
+
+// 로컬 날짜키 (YYYYMMDD) — 하루 1회 판정용
+const localDayKey = (d = new Date()): number => d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()
+const MORNING_START_MIN = 8 * 60 + 30 // 08:30
+const MORNING_DELAY_MS = 30 * 60 * 1000 // 첫 활동 후 30분
 
 export type StressEvent =
   | { type: 'key'; backspace: boolean }
@@ -47,6 +52,25 @@ export function initStressManager(): void {
     for (const w of BrowserWindow.getAllWindows()) {
       if (!w.isDestroyed()) w.webContents.send(channel, payload)
     }
+  }
+
+  // ── 아침 인사 (좋은 아침이에요 ☀️) — 08:30 이후 '첫 키보드·마우스 활동' 30분 후 하루 1회 ──
+  let morningTimer: ReturnType<typeof setTimeout> | null = null
+  const maybeScheduleMorning = (features: Record<string, number>): void => {
+    if (morningTimer) return // 이미 예약됨
+    const today = localDayKey()
+    if (loadMorningGreetDay() === today) return // 오늘 이미 인사함
+    const d = new Date()
+    if (d.getHours() * 60 + d.getMinutes() < MORNING_START_MIN) return // 08:30 이전
+    const active = Object.values(features).some((v) => typeof v === 'number' && v > 0) // 키/마우스 활동 있는 창
+    if (!active) return
+    morningTimer = setTimeout(() => {
+      morningTimer = null
+      if (loadMorningGreetDay() === localDayKey()) return
+      if (new Date().getHours() >= 12) return // 발동 시각이 정오 이후면 '좋은 아침'이 어색 → 건너뜀
+      saveMorningGreetDay(localDayKey())
+      broadcast('morning:greet')
+    }, MORNING_DELAY_MS)
   }
 
   const rollDay = (): void => {
@@ -103,6 +127,7 @@ export function initStressManager(): void {
   // collector.exe 가 stdout 으로 1분 창(16피처)을 주면 main 에서 'collector:window' 로 넘겨 호출한다.
   // 수집기·서버가 아직 안 붙었으면 이 경로는 호출되지 않으므로 자동 개입은 발생하지 않는다(= 기획서: 서버가 판정 주체).
   const onServerWindow = async (w: CollectorWindow): Promise<void> => {
+    maybeScheduleMorning(w.features) // 08:30 이후 첫 활동 감지 → 30분 뒤 아침 인사(하루 1회)
     let r
     try {
       r = await api.postWindow({
