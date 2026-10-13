@@ -357,6 +357,15 @@ body {
   border-bottom: 1px dashed #f0e6d2;
 }
 .mh__row:last-of-type { border-bottom: none; }
+/* 알람 간격 밑 "다음 ○○ · 오후 O:OO" — 지금 시각+간격 계산, 설정했음을 직관 표시 */
+.mh__nextalarm {
+  display: block; text-align: right;
+  font-size: 11px; font-weight: 700; color: #3da97c;
+  margin: -2px 0 0; padding: 0 2px 6px;
+  border-bottom: 1px dashed #f0e6d2;
+}
+.mh__row:has(+ .mh__nextalarm) { border-bottom: none; } /* 줄과 힌트를 한 묶음으로 */
+.mh__nextalarm:last-child { border-bottom: none; }
 .mh__row input[type='number'] { width: 64px; border: 1.5px solid #e0d4b8; border-radius: 7px; padding: 4px 7px; font-size: 12px; font-family: inherit; }
 .mh__row input[type='time'] { border: 1.5px solid #e0d4b8; border-radius: 7px; padding: 4px 7px; font-size: 12px; font-family: inherit; }
 .mh__med-del {

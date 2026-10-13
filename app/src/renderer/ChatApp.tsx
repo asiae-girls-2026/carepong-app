@@ -20,6 +20,20 @@ import { spriteUrl, poseUrl, roomBgFor, hasPoses, dexImg, creatureScale } from '
 const BETA_NAMES: Record<string, string> = { cat: '냥냥퐁', dragon: '용용퐁' }
 const DEFAULT_DEX_ORDER = ['cat', 'dragon'] // speciesOrder 없는 옛 저장용 기본
 
+// 알람 간격 설정 보조: "지금 시각 + 간격분" 을 오전/오후 H:MM 으로. 설정 화면에서 다음 울림 시각 직관 표시용
+function fmtClock(d: Date): string {
+  let h = d.getHours()
+  const ampm = h < 12 ? '오전' : '오후'
+  h = h % 12
+  if (h === 0) h = 12
+  return `${ampm} ${h}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+function nextAlarmClock(intervalMin: number): string {
+  const m = Math.floor(intervalMin)
+  if (!Number.isFinite(m) || m <= 0) return '--:--'
+  return fmtClock(new Date(Date.now() + m * 60000))
+}
+
 type ChatMode = 'med' | 'heart' | 'settings' | 'archive'
 
 interface ChatMessage {
@@ -1022,6 +1036,7 @@ export default function ChatApp() {
                       onKeyDown={(e) => { if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault() }}
                     />
                   </label>
+                  <span className="mh__nextalarm">⏰ 다음 물 · {nextAlarmClock(config.water.intervalMinutes)}</span>
                   {/* 스트레칭·휴식은 건강 펫의 기본 — 끌 수 없고 간격만 조절 */}
                   <label className="mh__row">
                     스트레칭 간격(분)
@@ -1033,6 +1048,7 @@ export default function ChatApp() {
                       onKeyDown={(e) => { if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault() }}
                     />
                   </label>
+                  <span className="mh__nextalarm">⏰ 다음 스트레칭 · {nextAlarmClock(aux.stretchMin)}</span>
                   <label className="mh__row">
                     휴식 간격(분)
                     <input
@@ -1043,6 +1059,7 @@ export default function ChatApp() {
                       onKeyDown={(e) => { if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault() }}
                     />
                   </label>
+                  <span className="mh__nextalarm">⏰ 다음 휴식 · {nextAlarmClock(aux.restMin)}</span>
                 </div>
 
                 <div className="mh__card">
