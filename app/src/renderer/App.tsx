@@ -470,6 +470,26 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // 업데이트 독촉 — 앱 시작 시 구버전이면 펫 말풍선으로 안내(구버전은 데이터가 0으로 잡히는 문제).
+  // 30분마다 재확인해 그 사이 새 릴리스가 올라와도 알림. 최신이면 아무것도 안 뜸.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const check = (): void => {
+      window.petApi
+        .checkUpdate()
+        .then((u) => {
+          if (u && !u.isLatest && u.latest && !namingRef.current && !rebirthRef.current) {
+            showBubble(`🔔 새 버전 v${u.latest}이 나왔어요! 미니홈 설정에서 업데이트해주세요 🙏`, 8000)
+          }
+        })
+        .catch(() => { /* 오프라인 등 무시 */ })
+    }
+    timer = setTimeout(check, 8000) // 첫 실행·이름짓기와 겹치지 않게 8초 뒤
+    const iv = setInterval(check, 30 * 60 * 1000)
+    return () => { if (timer) clearTimeout(timer); clearInterval(iv) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // 레벨업 연출 기준값
   useEffect(() => {
     if (!pet) return

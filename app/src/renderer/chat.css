@@ -34,6 +34,20 @@ body {
   display: flex; align-items: baseline; gap: 8px;
   padding: 4px 6px 8px;
 }
+/* 업데이트 독촉 배너 — 구버전일 때만(모든 탭 상단). 데이터 0값 문제 방지 위해 눈에 띄게 */
+.mh__updatebar {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  margin: 0 6px 6px; padding: 8px 11px;
+  background: #fff3e0; border: 1.5px solid #f0b86a; border-radius: 10px;
+  font-size: 12px; font-weight: 700; color: #a8600f; line-height: 1.4;
+}
+.mh__updatebar span { flex: 1; }
+.mh__updatebar b { color: #d2691e; }
+.mh__updatebar button {
+  flex: none; border: none; border-radius: 999px; background: var(--orange, #e8820e); color: #fff;
+  font-size: 12px; font-weight: 800; padding: 7px 13px; cursor: pointer;
+}
+.mh__updatebar button:hover { filter: brightness(0.95); }
 .mh__title { font-size: 17px; font-weight: 900; letter-spacing: -0.03em; color: #274a75; }
 .mh__title small { font-size: 12px; font-weight: 700; color: #5c7ba3; margin-left: 2px; }
 .mh__today {

@@ -1,7 +1,7 @@
 // 퐁이네 미니홈 — 싸이월드 미니홈피 문법(미니룸·책갈피 탭·TODAY)을 빌린 케어퐁 허브(기본 창)
 // 탭 3종: 💛 마음관리 / 📔 아카이브(도감) / ⚙️ 설정 (약 등록은 설정 안으로 · 기획서 10·11번)
 // 약 등록은 LUI(대화)·GUI(폼) 두 경로 제공 + 소요시간 자동 계측 → LUI vs GUI 비교 테스트용
-// 공감 응답: 서버 /chat(Bedrock, 10/14 1차 연동) → 실패 시 core/empathy.ts 규칙 응답 폴백. 위기 키워드는 서버에 안 보냄. 약설명은 규칙 기반(core/drugData.ts)
+// 공감·약설명 응답은 규칙 기반(Wizard-of-Oz) — LLM 교체 지점: core/empathy.ts, core/drugData.ts
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { CatalogItem } from '../core/catalog'
 import type { DrugInfo } from '../core/drugData'
@@ -279,11 +279,9 @@ export default function ChatApp() {
   }
   useEffect(() => {
     window.petApi.getVersion().then(setVersion).catch(() => { /* 무시 */ })
-  }, [])
-  useEffect(() => {
-    if (mode === 'settings' && !update && !checkingUpdate) runUpdateCheck()
+    runUpdateCheck() // 미니홈 진입 시 1회 — 구버전이면 상단 배너로 업데이트 유도(모든 탭)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode])
+  }, [])
 
   // 집주인(내 펫)·복약 데이터 동기화
   useEffect(() => {
@@ -547,27 +545,10 @@ export default function ChatApp() {
       handleMedMessage(text, thinkingId, started)
     } else {
       recordDiary({ note: text }) // 마음 일기장에 남김
-      const local = replyEmpathy(text) // 규칙 응답 — 위기 판정·완화 제안 플래그·서버 실패 시 폴백
-      const logChat = (source: 'rule' | 'bedrock'): void =>
-        // 공감챗봇 메시지 (호출위치표 D) — 원문 저장 X, 길이·키워드 적중 여부·응답 출처만
-        window.careApi.logEvent?.('chat_message', 'M05', { len: text.length, keyword_hit: !!(local.crisis || local.suggestRelief), source })
-      if (local.crisis) {
-        // 안전 > 페르소나: 위기 신호는 LLM 에 보내지 않고 전문기관 안내 고정 문구
-        logChat('rule')
-        resolveThinking(thinkingId, { role: 'pet', text: local.text, crisis: true }, started)
-        return
-      }
-      // 1차(10/14) LLM 연동: 서버 /chat → Bedrock 프롬프트(혜윤 10/13). 503/502/429·오프라인이면 규칙 응답으로 폴백
-      window.careApi
-        .chat(text)
-        .then((r) => {
-          logChat('bedrock')
-          resolveThinking(thinkingId, { role: 'pet', text: r.reply, suggestRelief: local.suggestRelief }, started)
-        })
-        .catch(() => {
-          logChat('rule')
-          resolveThinking(thinkingId, { role: 'pet', text: local.text, suggestRelief: local.suggestRelief }, started)
-        })
+      const r = replyEmpathy(text) // ← LLM 교체 지점
+      // 공감챗봇 메시지 (호출위치표 D) — 원문 저장 X, 길이·키워드 적중 여부만
+      window.careApi.logEvent?.('chat_message', 'M05', { len: text.length, keyword_hit: !!(r.crisis || r.suggestRelief) })
+      resolveThinking(thinkingId, { role: 'pet', text: r.text, crisis: r.crisis, suggestRelief: r.suggestRelief }, started)
     }
   }
 
@@ -653,6 +634,15 @@ export default function ChatApp() {
           ?
         </button>
       </header>
+
+      {update && !update.isLatest && (
+        <div className="mh__updatebar">
+          <span>🔔 새 버전 <b>v{update.latest}</b>이 나왔어요. 정확한 기록을 위해 업데이트가 필요해요.</span>
+          {update.downloadUrl && (
+            <button onClick={() => window.petApi.openExternal(update.downloadUrl as string)}>⬇ 업데이트</button>
+          )}
+        </div>
+      )}
 
       <div className="mh__frame">
         {guideOpen && (
