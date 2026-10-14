@@ -235,7 +235,30 @@ ipcMain.handle('app:version', (): string => app.getVersion())
 // 앱 실행(세션) 시작 시각 — 스트레칭·휴식 '첫 알람' 기준(아직 이행 전). 미니홈이 읽어 "다음 알람 시각"을 고정 표시
 const SESSION_START_MS = Date.now()
 ipcMain.handle('app:sessionStart', (): number => SESSION_START_MS)
-ipcMain.handle('app:checkUpdate', async (): Promise<UpdateInfo> => {
+// 최신 버전 확인 결과는 메인이 한 곳에서 들고(펫 창·미니홈이 각자 따로 조회하면 시점이 어긋남),
+// 새 버전을 발견하면 열려 있는 창 전부에 즉시 밀어 넣는다 → 미니홈을 켜 둔 채여도 상단 배너가 바로 뜸.
+// 실패(오프라인·GitHub 요청 한도 등)한 조회는 직전 성공 결과로 대신해 배너가 깜빡이며 사라지지 않게 한다.
+let lastUpdate: UpdateInfo | null = null
+let lastUpdateAt = 0
+const UPDATE_CACHE_MS = 60 * 1000 // 창 포커스 등으로 몰리는 연속 조회는 1분간 캐시
+function broadcastUpdate(info: UpdateInfo): void {
+  for (const w of [win, chat]) {
+    if (w && !w.isDestroyed()) w.webContents.send('app:updateInfo', info)
+  }
+}
+async function checkUpdate(): Promise<UpdateInfo> {
+  const now = Date.now()
+  if (lastUpdate && now - lastUpdateAt < UPDATE_CACHE_MS) return lastUpdate
+  let info = await fetchLatestRelease()
+  if (info.error && lastUpdate && !lastUpdate.error) info = lastUpdate // 일시 실패 → 직전 성공 결과 유지
+  const changed = !lastUpdate || lastUpdate.latest !== info.latest || lastUpdate.isLatest !== info.isLatest
+  lastUpdate = info
+  lastUpdateAt = now
+  if (changed || !info.isLatest) broadcastUpdate(info)
+  return info
+}
+ipcMain.handle('app:checkUpdate', (): Promise<UpdateInfo> => checkUpdate())
+async function fetchLatestRelease(): Promise<UpdateInfo> {
   const current = app.getVersion()
   const fail = (error: string): UpdateInfo => ({ current, latest: null, isLatest: true, downloadUrl: null, error })
   const ctrl = new AbortController()
@@ -258,7 +281,7 @@ ipcMain.handle('app:checkUpdate', async (): Promise<UpdateInfo> => {
   } finally {
     clearTimeout(t)
   }
-})
+}
 // 다운로드 링크는 가능하면 Chrome으로 연다 — Edge의 SmartScreen 경고 흐름이 번잡하다는 팀 피드백.
 // Chrome이 설치돼 있으면 Chrome으로, 없으면 기본 브라우저로 폴백. (서명 없는 설치파일 경고 자체는 코드서명 전까지 남음)
 function openDownloadUrl(url: string): void {

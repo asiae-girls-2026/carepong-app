@@ -137,7 +137,7 @@ const TimeSelect = ({ value, onChange }: { value: string; onChange: (v: string) 
   )
 }
 // QA 전용 테스트 버튼 노출 플래그 — 최종 공개 배포 전에는 false로 바꾸고 빌드하세요(일반 사용자에게 숨김).
-const QA_MODE = true
+const QA_MODE = false // 0.3.0 공개 배포: QA 전용 버튼 숨김
 // 하트 적립 기준(Q2-a · 기획서8): 공백 제외 2자 이상 AND 자음/모음(미완성 글자)만이 아닌 메시지만 적립 — 오용(ㄱㄴㄷ·ㅏㅑ) 방지
 const earnsHeart = (t: string): boolean => {
   const s = (t || '').replace(/\s/g, '')
@@ -281,7 +281,9 @@ export default function ChatApp() {
     const iv = setInterval(runUpdateCheck, 10 * 60 * 1000)
     const onFocus = (): void => runUpdateCheck()
     window.addEventListener('focus', onFocus)
-    return () => { clearInterval(iv); window.removeEventListener('focus', onFocus) }
+    // 펫 창(30분 주기)이 먼저 새 버전을 발견하면 메인이 밀어줌 → 미니홈을 나갔다 오지 않아도 배너가 뜸
+    const offPush = window.petApi.onUpdateInfo((u) => { setUpdate(u); setVersion(u.current) })
+    return () => { clearInterval(iv); window.removeEventListener('focus', onFocus); offPush() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

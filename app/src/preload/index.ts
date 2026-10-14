@@ -40,6 +40,12 @@ const petApi = {
   getVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
   sessionStart: (): Promise<number> => ipcRenderer.invoke('app:sessionStart'),
   checkUpdate: (): Promise<UpdateInfo> => ipcRenderer.invoke('app:checkUpdate'),
+  // 메인이 새 버전을 발견했을 때 밀어주는 결과 구독 (미니홈을 켜 둔 채여도 상단 배너 즉시 갱신)
+  onUpdateInfo: (cb: (u: UpdateInfo) => void): (() => void) => {
+    const handler = (_e: unknown, u: UpdateInfo): void => cb(u)
+    ipcRenderer.on('app:updateInfo', handler)
+    return () => ipcRenderer.removeListener('app:updateInfo', handler)
+  },
   openExternal: (url: string): void => ipcRenderer.send('app:openExternal', url),
 }
 
