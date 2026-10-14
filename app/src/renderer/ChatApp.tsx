@@ -20,18 +20,13 @@ import { spriteUrl, poseUrl, roomBgFor, hasPoses, dexImg, creatureScale } from '
 const BETA_NAMES: Record<string, string> = { cat: '냥냥퐁', dragon: '용용퐁' }
 const DEFAULT_DEX_ORDER = ['cat', 'dragon'] // speciesOrder 없는 옛 저장용 기본
 
-// 알람 간격 설정 보조: "지금 시각 + 간격분" 을 오전/오후 H:MM 으로. 설정 화면에서 다음 울림 시각 직관 표시용
+// 시각 포맷: Date → 오전/오후 H:MM. "다음 알람 시각" 표시용
 function fmtClock(d: Date): string {
   let h = d.getHours()
   const ampm = h < 12 ? '오전' : '오후'
   h = h % 12
   if (h === 0) h = 12
   return `${ampm} ${h}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-function nextAlarmClock(intervalMin: number): string {
-  const m = Math.floor(intervalMin)
-  if (!Number.isFinite(m) || m <= 0) return '--:--'
-  return fmtClock(new Date(Date.now() + m * 60000))
 }
 
 type ChatMode = 'med' | 'heart' | 'settings' | 'archive'
@@ -261,6 +256,7 @@ export default function ChatApp() {
   const [version, setVersion] = useState('') // 현재 설치 버전 (설정 하단 표시)
   const [update, setUpdate] = useState<UpdateInfo | null>(null) // 최신 릴리스 비교 결과
   const [checkingUpdate, setCheckingUpdate] = useState(false)
+  const [sessionStart, setSessionStart] = useState<number | null>(null) // 앱 실행 시작 시각 — 스트레칭·휴식 첫 알람 기준
   const nextId = useRef(3)
   const feedRef = useRef<HTMLDivElement>(null)
   const modeRef = useRef(mode)
@@ -279,6 +275,7 @@ export default function ChatApp() {
   }
   useEffect(() => {
     window.petApi.getVersion().then(setVersion).catch(() => { /* 무시 */ })
+    window.petApi.sessionStart().then(setSessionStart).catch(() => { /* 무시 */ })
     runUpdateCheck() // 미니홈 진입 시 1회 — 구버전이면 상단 배너로 업데이트 유도(모든 탭)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -629,6 +626,18 @@ export default function ChatApp() {
     window.petApi.saveConfig(next)
   }
   const aux = config.aux ?? DEFAULT_AUX
+  // "다음 ○○ 시각" — 실제 알람 기준(마지막 이행 or 앱 시작 + 간격)으로 고정 표시. 미니홈 열 때마다 바뀌지 않음.
+  const nextIntervalLabel = (last: number | null, intervalMin: number): string => {
+    const base = last ?? sessionStart ?? Date.now()
+    const next = base + Math.max(0, intervalMin) * 60000
+    return next <= Date.now() ? '곧' : fmtClock(new Date(next))
+  }
+  const nextWaterLabel = (): string => {
+    if (waterToday >= config.water.dailyTargetCups) return '오늘 목표 달성 🎉'
+    if (intake.lastDrinkAt == null) return '곧'
+    const next = intake.lastDrinkAt + config.water.intervalMinutes * 60000
+    return next <= Date.now() ? '곧' : fmtClock(new Date(next))
+  }
   const avg = (method: 'lui' | 'gui'): number | null => {
     const arr = regLogs.filter((r) => r.method === method)
     if (arr.length === 0) return null
@@ -1061,7 +1070,7 @@ export default function ChatApp() {
                       onKeyDown={(e) => { if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault() }}
                     />
                   </label>
-                  <span className="mh__nextalarm">⏰ 다음 물 · {nextAlarmClock(config.water.intervalMinutes)}</span>
+                  <span className="mh__nextalarm">⏰ 다음 물 · {nextWaterLabel()}</span>
                   {/* 스트레칭·휴식은 건강 펫의 기본 — 끌 수 없고 간격만 조절 */}
                   <label className="mh__row">
                     스트레칭 간격(분)
@@ -1073,7 +1082,7 @@ export default function ChatApp() {
                       onKeyDown={(e) => { if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault() }}
                     />
                   </label>
-                  <span className="mh__nextalarm">⏰ 다음 스트레칭 · {nextAlarmClock(aux.stretchMin)}</span>
+                  <span className="mh__nextalarm">⏰ 다음 스트레칭 · {nextIntervalLabel(intake.lastStretchAt, aux.stretchMin)}</span>
                   <label className="mh__row">
                     휴식 간격(분)
                     <input
@@ -1084,7 +1093,7 @@ export default function ChatApp() {
                       onKeyDown={(e) => { if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault() }}
                     />
                   </label>
-                  <span className="mh__nextalarm">⏰ 다음 휴식 · {nextAlarmClock(aux.restMin)}</span>
+                  <span className="mh__nextalarm">⏰ 다음 휴식 · {nextIntervalLabel(intake.lastRestAt, aux.restMin)}</span>
                 </div>
 
                 <div className="mh__card">

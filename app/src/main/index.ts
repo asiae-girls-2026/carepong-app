@@ -232,6 +232,9 @@ function cmpVer(a: string, b: string): number {
   return 0
 }
 ipcMain.handle('app:version', (): string => app.getVersion())
+// 앱 실행(세션) 시작 시각 — 스트레칭·휴식 '첫 알람' 기준(아직 이행 전). 미니홈이 읽어 "다음 알람 시각"을 고정 표시
+const SESSION_START_MS = Date.now()
+ipcMain.handle('app:sessionStart', (): number => SESSION_START_MS)
 ipcMain.handle('app:checkUpdate', async (): Promise<UpdateInfo> => {
   const current = app.getVersion()
   const fail = (error: string): UpdateInfo => ({ current, latest: null, isLatest: true, downloadUrl: null, error })

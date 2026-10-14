@@ -38,6 +38,7 @@ const petApi = {
   notify: (title: string, body: string): void => ipcRenderer.send('pet:notify', { title, body }),
   // 버전: 현재 버전 조회 / 최신 릴리스 비교 / 다운로드 링크 열기
   getVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
+  sessionStart: (): Promise<number> => ipcRenderer.invoke('app:sessionStart'),
   checkUpdate: (): Promise<UpdateInfo> => ipcRenderer.invoke('app:checkUpdate'),
   openExternal: (url: string): void => ipcRenderer.send('app:openExternal', url),
 }
