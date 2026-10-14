@@ -258,23 +258,34 @@ async function checkUpdate(): Promise<UpdateInfo> {
   return info
 }
 ipcMain.handle('app:checkUpdate', (): Promise<UpdateInfo> => checkUpdate())
+// GitHub REST API(api.github.com)는 로그인 없이 쓰면 "같은 인터넷 회선당 시간당 60회" 제한이 있어
+// 사무실처럼 여러 PC 가 한 회선을 쓰면 금방 403 이 났다(10/14 실측). 그래서 API 대신
+// github.com/<repo>/releases/latest 의 리다이렉트(제한 없음)에서 최신 태그를 읽는다.
+// 설치파일 이름은 electron-builder artifactName 규칙(CarePong-Setup-win-<버전>.exe)과 같아야 한다.
+const SETUP_NAME = (ver: string): string => `CarePong-Setup-win-${ver}.exe`
 async function fetchLatestRelease(): Promise<UpdateInfo> {
   const current = app.getVersion()
   const fail = (error: string): UpdateInfo => ({ current, latest: null, isLatest: true, downloadUrl: null, error })
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), 6000)
   try {
-    const res = await fetch(`https://api.github.com/repos/${RELEASES_REPO}/releases/latest`, {
-      headers: { Accept: 'application/vnd.github+json' },
-      signal: ctrl.signal,
-    })
+    const res = await fetch(`https://github.com/${RELEASES_REPO}/releases/latest`, { redirect: 'manual', signal: ctrl.signal })
     if (res.status === 404) return fail('아직 공개된 릴리스가 없어요')
-    if (!res.ok) return fail(`버전 확인 실패 (HTTP ${res.status})`)
-    const j = (await res.json()) as { tag_name?: string; html_url?: string; assets?: { name?: string; browser_download_url?: string }[] }
-    const latest = String(j.tag_name ?? '').replace(/^v/i, '')
-    if (!latest) return fail('최신 버전 정보를 읽지 못했어요')
-    const exe = Array.isArray(j.assets) ? j.assets.find((a) => typeof a?.name === 'string' && a.name.toLowerCase().endsWith('.exe')) : undefined
-    const downloadUrl = exe?.browser_download_url ?? j.html_url ?? null
+    const loc = res.headers.get('location') ?? ''
+    const m = /\/releases\/tag\/([^/?#]+)/.exec(loc)
+    if (!m) return fail(res.status >= 300 && res.status < 400 ? '최신 버전 정보를 읽지 못했어요' : `버전 확인 실패 (HTTP ${res.status})`)
+    const tag = decodeURIComponent(m[1])
+    const latest = tag.replace(/^v/i, '')
+    const tagPage = `https://github.com/${RELEASES_REPO}/releases/tag/${tag}`
+    // 설치파일 직접 링크가 실제로 있는지 확인(HEAD, 제한 없음). 이름이 다르면 릴리스 페이지로 폴백
+    let downloadUrl = tagPage
+    try {
+      const dl = `https://github.com/${RELEASES_REPO}/releases/download/${tag}/${SETUP_NAME(latest)}`
+      const head = await fetch(dl, { method: 'HEAD', redirect: 'manual', signal: ctrl.signal })
+      if (head.ok || (head.status >= 300 && head.status < 400)) downloadUrl = dl
+    } catch {
+      /* 확인 실패 → 릴리스 페이지 */
+    }
     return { current, latest, isLatest: cmpVer(current, latest) >= 0, downloadUrl, error: null }
   } catch {
     return fail('네트워크 확인 실패 (인터넷 연결을 확인해 주세요)')
