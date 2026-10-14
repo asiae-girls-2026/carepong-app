@@ -277,6 +277,11 @@ export default function ChatApp() {
     window.petApi.getVersion().then(setVersion).catch(() => { /* 무시 */ })
     window.petApi.sessionStart().then(setSessionStart).catch(() => { /* 무시 */ })
     runUpdateCheck() // 미니홈 진입 시 1회 — 구버전이면 상단 배너로 업데이트 유도(모든 탭)
+    // 미니홈을 켜 둔 채로 새 릴리스가 올라와도 배너가 뜨게: 10분마다 + 창 포커스 시 재확인
+    const iv = setInterval(runUpdateCheck, 10 * 60 * 1000)
+    const onFocus = (): void => runUpdateCheck()
+    window.addEventListener('focus', onFocus)
+    return () => { clearInterval(iv); window.removeEventListener('focus', onFocus) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
