@@ -1,0 +1,58 @@
+# 케어퐁 서버 — 상자 3개(api·model·db)를 한 번에 켜는 설정
+# 로컬:  docker compose -f infra/docker-compose.yml up --build      → http://localhost:8000/docs
+# AWS :  docker compose -f infra/docker-compose.yml -f infra/docker-compose.aws.yml up -d --build
+#        (db 상자 제거, DATABASE_URL 은 RDS, api 가 80 포트를 받고 ALB 가 TLS 종단 — 정화 10/4 구성)
+# 끄기:  docker compose down        (DB 데이터 유지)   /   down -v (DB 데이터까지 삭제)
+
+services:
+
+  # ① 메인 API (FastAPI) — 감지·이벤트·설정·약·펫. 켜질 때 migrations/*.sql 자동 적용
+  api:
+    build: ../api
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://carepong:carepong@db:5432/carepong}
+      DATA_GO_KR_KEY: ${DATA_GO_KR_KEY:-}
+      FOODSAFETY_KEY: ${FOODSAFETY_KEY:-}
+      MODEL_URL: ${MODEL_URL:-http://model:8001}   # 로컬 기본 = 같은 compose 의 model 상자. AWS 는 .env 로 지정
+      # 공감챗(Bedrock). ARN 비우면 /v1/chat 503 → 앱 규칙 응답. 자격증명은 EC2 인스턴스 역할 또는 .env 의 AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY
+      BEDROCK_PROMPT_ARN: ${BEDROCK_PROMPT_ARN:-}
+      BEDROCK_REGION: ${BEDROCK_REGION:-ap-northeast-2}
+      CHAT_DAILY_MAX: ${CHAT_DAILY_MAX:-30}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    ports:
+      - "8000:8000"      # 로컬 테스트용
+    volumes:
+      - ../api:/app      # 로컬: 내 PC 의 api 폴더를 상자에 그대로 연결 → 코드·SQL 바꾸면 재빌드 없이 바로 반영 (AWS 오버라이드에서 해제)
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]   # 로컬 자동 리로드
+    depends_on:
+      db:
+        condition: service_healthy
+      model:
+        condition: service_started
+
+  # ② 모델 API (FastAPI) — 혜윤 predict.py. api 만 내부 네트워크로 호출
+  model:
+    build: ../model
+    ports:
+      - "8001:8001"      # 로컬 디버그용. AWS에선 안 열림 (aws 오버라이드)
+
+  # ③ DB — 로컬 테스트용. AWS에선 RDS 사용 (aws 오버라이드에서 제거)
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: carepong
+      POSTGRES_PASSWORD: carepong
+      POSTGRES_DB: carepong
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U carepong"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  db_data:

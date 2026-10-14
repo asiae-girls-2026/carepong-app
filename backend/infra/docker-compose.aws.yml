@@ -1,0 +1,45 @@
+# AWS 오버라이드 — EC2에서 base docker-compose.yml과 같이 사용
+# ALB → Backend EC2:80 → api container:8000
+# DATABASE_URL / MODEL_URL / API KEY들은 .env에서 전달
+
+services:
+  api:
+    # 로컬 개발용 bind mount 제거
+    volumes: !reset []
+
+    # ALB가 Backend EC2의 8000번 포트로 접근
+    ports: !override
+      - "8000:8000"
+
+    # 운영에서는 --reload 제거
+    command:
+      [
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000"
+      ]
+
+    # AWS에서는 model 컨테이너를 같은 EC2에서 띄우지 않음
+    depends_on: !reset []
+
+    # 컨테이너 장애/EC2 재부팅 후 자동 재시작.
+    # always 로 둔 이유(10/12): unless-stopped 는 EC2 중지 전에 `docker compose stop` 으로 내려 둔 컨테이너를
+    # 재부팅 뒤 다시 올리지 않는다 → ALB 가 503 만 돌려주는 상태가 사람이 올릴 때까지 지속. always 는 무조건 올린다.
+    restart: always
+
+  # ML 서버는 별도 EC2에서 실행
+  # base compose의 model 서비스를 AWS에서는 기본 실행 대상에서 제외
+  model:
+    profiles:
+      - local-only
+    ports: !reset []
+
+  # AWS에서는 로컬 PostgreSQL 컨테이너 대신 RDS 사용
+
+  db:
+    profiles:
+      - local-only
+    ports: !reset []

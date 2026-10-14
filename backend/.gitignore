@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.env
+.env.*
+.pytest_cache/
+# PyInstaller 산출물 (수집기 exe)
+build/
+dist/
+*.spec
+*.exe
+# 로컬 로그·데이터
+*.log
+*.csv
