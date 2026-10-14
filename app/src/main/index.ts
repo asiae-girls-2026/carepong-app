@@ -199,6 +199,7 @@ ipcMain.on('api:logEvent', (_e, { event, screen, props }: { event: string; scree
   api.logEvent(event, screen, props ?? {}),
 )
 ipcMain.handle('api:selfReport', (_e, payload: Parameters<typeof api.postSelfReport>[0]) => api.postSelfReport(payload))
+ipcMain.handle('api:chat', (_e, message: string) => api.postChat(message))
 ipcMain.on('pet:setClickThrough', (_e, enabled: boolean) => {
   win?.setIgnoreMouseEvents(enabled, { forward: true })
 })

@@ -281,6 +281,21 @@ function scheduleDailyFlush(): void {
   )
 }
 
+export interface ChatReply {
+  reply: string
+  source: string // 'bedrock'
+  model_id: string
+  latency_ms: number
+}
+/** 공감챗 1건 (M05) → 서버 /chat → Bedrock 프롬프트 응답. 503/502/429·타임아웃이면 throw → 호출 측이 규칙 응답(replyEmpathy)으로 폴백.
+ *  원문은 서버가 저장하지 않음. 위기 키워드는 호출 전에 앱이 걸러서(isCrisis) 서버에 보내지 않는다. */
+export async function postChat(message: string): Promise<ChatReply> {
+  if (initializing) await initializing
+  const r = await call('POST', `${V}/chat`, { message, client_event_id: uid() }, { timeoutMs: 15000 })
+  if (!r || typeof r.reply !== 'string' || !r.reply.trim()) throw new Error('Invalid chat response')
+  return r as ChatReply
+}
+
 /** 설정·펫 백업 (바뀔 때). 원본은 앱 로컬 — 실패해도 앱 동작엔 영향 없음 */
 export const putRoutines = (settings: Record<string, unknown>): Promise<any> =>
   call('PUT', `${V}/routines`, settings).catch((e) => {

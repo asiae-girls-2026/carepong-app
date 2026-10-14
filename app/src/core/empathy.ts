@@ -7,8 +7,8 @@
 //  3) 타이핑 속도·성과·오타를 언급하지 않는다.
 //  4) 위기 신호 감지 시 톤을 낮추고 즉시 전문기관 안내 (안전 > 페르소나).
 //
-// ⚠ MVP는 규칙 기반(Wizard-of-Oz). LLM 연동 시 이 파일의 replyEmpathy만 교체하면 된다.
-//   (교체 지점: replyEmpathy → Gemini/Claude API 호출 + 아래 SYSTEM_PERSONA를 시스템 프롬프트로)
+// 10/14 1차: LLM(Bedrock) 연동은 서버 /chat 경유 (renderer/ChatApp.tsx send → main/api.ts postChat). 프롬프트는 Bedrock 콘솔(혜윤 10/13).
+//   이 파일은 ① 위기 판정(isCrisis — LLM 호출 전 차단) ② 완화 제안 플래그 ③ 서버 실패·오프라인 시 폴백 응답으로 계속 쓴다.
 
 export interface EmpathyReply {
   text: string

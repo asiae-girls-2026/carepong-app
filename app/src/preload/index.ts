@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('petApi', petApi)
 import type { StressSnapshot } from '../core/stress'
 import type { DrugSearchResult } from '../main/drugSearch'
 import type { StressEvent, StressAlert } from '../main/stress'
+import type { ChatReply } from '../main/api'
 
 const careApi = {
   searchDrug: (name: string): Promise<DrugSearchResult> => ipcRenderer.invoke('drug:search', name),
@@ -91,6 +92,8 @@ const careApi = {
   // 실시간 자가보고 (호출위치표 B): 팝업 응답·체크인
   selfReport: (payload: Record<string, unknown>): Promise<unknown> =>
     ipcRenderer.invoke('api:selfReport', payload),
+  // 공감챗 (M05): 서버 /chat → Bedrock. 실패 시 reject → 렌더러가 규칙 응답으로 폴백
+  chat: (message: string): Promise<ChatReply> => ipcRenderer.invoke('api:chat', message),
 }
 
 contextBridge.exposeInMainWorld('careApi', careApi)
