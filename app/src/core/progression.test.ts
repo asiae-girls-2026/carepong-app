@@ -45,7 +45,7 @@ describe('만렙 환생 (규칙서 7시트)', () => {
     expect(born.xp).toBe(0)
     expect(born.stats).toEqual({ health: 70, happiness: 70, energy: 70 })
     expect(born.generation).toBe(2)
-    expect(born.lifetime).toEqual({ care: 12, alarms: 34, reliefs: 5, chats: 7 })
+    expect(born.lifetime).toEqual({ care: 12, alarms: 34, reliefs: 5, chats: 0 }) // 환생 시 방꾸미기(chats)만 0으로 리셋, 통계는 유지
     expect(born.name).toBe('퐁이')
     expect(born.creature).toBe('dragon') // cat → 다음 캐릭터(dragon)
     expect(born.ancestors).toEqual([{ creature: 'cat', name: '퐁이' }])

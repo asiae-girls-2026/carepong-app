@@ -18,7 +18,7 @@ export interface LifetimeLog {
   care: number // 누적 돌봄 행동(밥·쓰다듬기·산책)
   alarms: number // 누적 알람 이행(약·물·스트레칭·휴식)
   reliefs: number // 누적 스트레스 개입 완료(심호흡·명상)
-  chats: number // 누적 대화·기분 체크 — 미니홈 가구 언락 기준
+  chats: number // 현재 캐릭터의 누적 하트(대화·기분 체크) — 미니홈 방꾸미기 언락 기준. 환생 시 0으로 리셋(캐릭터별 빈방부터)
 }
 
 export interface Pet {

@@ -793,6 +793,11 @@ export default function ChatApp() {
                 </i>
               ))}
             </span>
+            {/* 누적 하트 — 이 캐릭터 방꾸미기 진척(환생 시 0부터). 다음 방까지 몇 개 남았는지 표시 */}
+            <span className="mh__hearts-acc">
+              💜 누적 {lifetimeChats}
+              {nextRoom ? ` · 다음 방까지 ${Math.max(0, nextRoom.hearts - lifetimeChats)}` : ' · 방 완성 🎉'}
+            </span>
           </div>
         )}
 

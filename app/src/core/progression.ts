@@ -94,6 +94,8 @@ export function rebirth(pet: Pet, now: number): Pet {
     stats: { health: INITIAL_GAUGE, happiness: INITIAL_GAUGE, energy: INITIAL_GAUGE },
     birthday: now,
     generation: pet.generation + 1,
+    // 방꾸미기(누적 하트)는 캐릭터별 — 환생하면 새 캐릭터는 빈방부터 다시 꾸민다(chats=0). care/alarms/reliefs 통계는 유지.
+    lifetime: { ...pet.lifetime, chats: 0 },
     ancestors: [...normalizeAncestors(pet.ancestors), { creature: pet.creature, name: pet.name }],
   }
 }

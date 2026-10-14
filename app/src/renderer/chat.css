@@ -526,6 +526,8 @@ body {
 }
 .mh__hearts-label { font-size: 10px; font-weight: 800; color: #8a6f3e; flex: none; }
 .mh__hearts-row { display: flex; gap: 2px; }
+/* 누적 하트(방꾸미기 진척) — 오른쪽 정렬 */
+.mh__hearts-acc { margin-left: auto; flex: none; font-size: 10px; font-weight: 700; color: #9a6cc4; white-space: nowrap; }
 .mh__hearts-row i { font-style: normal; font-size: 11px; filter: grayscale(0.15); transition: transform 0.15s ease; }
 .mh__hearts-row i.on { animation: heartPop 0.35s ease; }
 @keyframes heartPop { 0% { transform: scale(0.4); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }
