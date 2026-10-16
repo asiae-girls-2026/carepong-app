@@ -138,13 +138,27 @@ function openChatWindow(mode: 'med' | 'heart' | 'settings' = 'heart'): void {
   notifyChatVisible(true)
 }
 
+// 모든 모니터를 합친 전체 영역(가상 데스크탑) — 펫이 모니터 사이를 오갈 수 있도록 창을 이 영역에 펼친다.
+// 왼쪽/위쪽에 둔 보조 모니터는 x·y가 음수일 수 있어 min/max로 경계를 구한다.
+function virtualBounds(): { x: number; y: number; width: number; height: number } {
+  const ds = screen.getAllDisplays()
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const d of ds) {
+    minX = Math.min(minX, d.bounds.x)
+    minY = Math.min(minY, d.bounds.y)
+    maxX = Math.max(maxX, d.bounds.x + d.bounds.width)
+    maxY = Math.max(maxY, d.bounds.y + d.bounds.height)
+  }
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+}
+
 function createWindow(): void {
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize
+  const vb = virtualBounds()
   win = new BrowserWindow({
-    width,
-    height,
-    x: 0,
-    y: 0,
+    width: vb.width,
+    height: vb.height,
+    x: vb.x,
+    y: vb.y,
     transparent: true,
     frame: false,
     resizable: false,
@@ -158,6 +172,8 @@ function createWindow(): void {
     },
   })
 
+  // 음수 좌표(왼쪽/위 보조 모니터)까지 정확히 덮도록 생성 후 한 번 더 명시 설정
+  win.setBounds(virtualBounds())
   // 'screen-saver' 레벨은 Windows 작업표시줄보다 위라 작업표시줄을 가린다 → 'floating'으로 낮춤
   // (펫은 일반 창들 위에 그대로 떠 있고, 작업표시줄은 정상 노출·클릭 가능)
   win.setAlwaysOnTop(true, 'floating')
@@ -397,6 +413,11 @@ app.whenReady().then(async () => {
   showCollectNotice()
 
   createWindow()
+  // 모니터 연결·해제·배치 변경 시 오버레이를 새 전체 영역으로 다시 펼친다(펫이 계속 모든 모니터를 오가도록)
+  const respanOverlay = (): void => { if (win && !win.isDestroyed()) win.setBounds(virtualBounds()) }
+  screen.on('display-added', respanOverlay)
+  screen.on('display-removed', respanOverlay)
+  screen.on('display-metrics-changed', respanOverlay)
   createTray()
   // 수집기 시작 전에 등록된 CP 회원번호를 로컬 세션 라벨로 전달한다(올바른 CP-… 형식만 --user-id로 전달). (DA 인계)
   const cpNumber = loadHealth().memberId ?? 'CP-UNSET'
