@@ -1225,7 +1225,7 @@ export default function ChatApp() {
                         </span>
                       ))}
                       <button className="mh__gadd" onClick={() => setSTimes((prev) => [...prev, '13:00'])}>
-                        + 시간
+                        + 복용 시간
                       </button>
                     </div>
                     {regNotice && <p className="mh__reg-notice" role="status" aria-live="polite">{regNotice}</p>}
@@ -1246,7 +1246,7 @@ export default function ChatApp() {
                         setSTimes(['09:00'])
                       }}
                     >
-                      등록
+                      {config.medications.length > 0 ? '➕ 약 추가' : '약 등록'}
                     </button>
                   </div>
                 </div>
