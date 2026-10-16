@@ -54,6 +54,13 @@ const SNOOZE_MS = 10 * 60 * 1000 // 놓치거나 '나중에' 누르면 10분 뒤
 const REMINDER_AUTO_MS = 30 * 1000 // 무응답 시 자동 닫힘(벌점 없음 · 클릭 가로채기 방지)
 const REMINDER_AUTO_MED_MS = 10 * 60 * 1000 // 복약은 약 먹고 돌아와 확인하는 경우가 많아 길게(10분). 확인 전에 꺼지는 문제 방지
 
+// 한글 받침 유무로 조사 선택 — 이름+조사. 받침 있으면 withB("둥"+"이"→"둥이"), 없으면 withoutB("퐁이"+"가"→"퐁이가")
+const josa = (name: string, withB: string, withoutB: string): string => {
+  const c = name.charCodeAt(name.length - 1)
+  const hasBatchim = !Number.isNaN(c) && c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 !== 0
+  return name + (hasBatchim ? withB : withoutB) // 한글 음절이 아니면(영문·숫자 등) 받침 없음으로 처리
+}
+
 const WANDER_MS = 33
 const IDLE_SPEED = 0.8
 const WALK_SPEED = 3.0
@@ -239,6 +246,7 @@ export default function App() {
         pet: petRef.current,
         position: positionRef.current,
         lastTickAt: lastTickAt.current,
+        manualDnd: manualDndRef.current, // 현재 수동 방해금지 상태 저장·전송
       })
     }
   }
@@ -267,7 +275,7 @@ export default function App() {
       setRebirthPrompt(true)
       interactive.current = true
       window.petApi.setClickThrough(false)
-      window.petApi.notify('케어퐁', `${result.pet.name}이(가) 만렙이 됐어요! 🎓 환생할 준비가 됐어요`)
+      window.petApi.notify('케어퐁', `${josa(result.pet.name, '이', '가')} 만렙이 됐어요! 🎓 환생할 준비가 됐어요`)
     }
     return result.pet
   }
@@ -361,6 +369,9 @@ export default function App() {
       if (valid) {
         setPet(saved.pet)
         setPosition(start)
+        // 현재 수동 방해금지 상태 복원 — 재시작해도 켜둔 방해금지가 유지되도록
+        setManualDnd(saved.manualDnd ?? false)
+        manualDndRef.current = saved.manualDnd ?? false
       } else {
         // 첫 실행: 냥냥퐁/용용퐁 중 랜덤으로 첫 캐릭터 결정(순서 배열 저장 — 환생·도감 기준)
         const order = randomBetaOrder()
@@ -565,7 +576,7 @@ export default function App() {
     interactive.current = false
     window.petApi.setClickThrough(true)
     log('rename', 'P07', {})
-    showBubble(`반가워요! 저는 ${nm}이에요 🐣 서로 잘 돌봐줘요, 우리`, 5000)
+    showBubble(`반가워요! 저는 ${josa(nm, '이에요', '예요')} 🐣 서로 잘 돌봐줘요, 우리`, 5000)
   }
 
   // ── 알람 표시 + 도래 점검 ──
@@ -999,6 +1010,7 @@ export default function App() {
         manualDndRef.current = on
         setManualDnd(on)
         log('dnd_toggle', 'P08', { on, src: 'menu', hour: new Date().getHours() })
+        saveNow() // 토글 즉시 저장·전송(putPet dnd_manual) — 주기 저장 기다리지 않음
         if (on && reminderRef.current) clearReminder()
         showBubble(on ? '방해금지 ON 😴 조용히 쉬면서 기력을 회복할게요' : '방해금지 OFF 🙆 다시 곁에 있을게요', 3500)
       } else if (command === 'hide') {
@@ -1267,7 +1279,7 @@ export default function App() {
       {rebirthPrompt && (
         <div className="invite-prompt" onPointerDown={(e) => e.stopPropagation()}>
           <div className="invite-prompt__text">
-            🎓 {pet.name}이(가) 만렙(Lv.5)이 됐어요!
+            🎓 {josa(pet.name, '이', '가')} 만렙(Lv.5)이 됐어요!
             <br />
             졸업하고, 새로운 모습의 아기로 환생할까요?
             <br />

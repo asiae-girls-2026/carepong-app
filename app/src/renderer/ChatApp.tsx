@@ -18,6 +18,14 @@ import { spriteUrl, poseUrl, roomBgFor, hasPoses, dexImg, creatureScale } from '
 
 // 펫 도감 — 베타 2종. 번호(순서)는 '랜덤 첫 등장 캐릭터가 1번' = pet.speciesOrder 기준
 const BETA_NAMES: Record<string, string> = { cat: '냥냥퐁', dragon: '용용퐁' }
+
+// 한글 받침 유무로 조사 선택 — 이름+조사. 받침 있으면 withB("둥"+"은"→"둥은"), 없으면 withoutB("퐁이"+"는"→"퐁이는")
+// 예: josa(name,'은','는') / josa(name,'이','가') / josa(name,'과','와')
+const josa = (name: string, withB: string, withoutB: string): string => {
+  const c = name.charCodeAt(name.length - 1)
+  const hasBatchim = !Number.isNaN(c) && c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 !== 0
+  return name + (hasBatchim ? withB : withoutB) // 한글 음절이 아니면(영문·숫자 등) 받침 없음으로 처리
+}
 const DEFAULT_DEX_ORDER = ['cat', 'dragon'] // speciesOrder 없는 옛 저장용 기본
 
 // 시각 포맷: Date → 오전/오후 H:MM. "다음 알람 시각" 표시용
@@ -889,7 +897,7 @@ export default function ChatApp() {
                         )}
                         <div className={`msg__bubble${m.crisis ? ' msg__bubble--crisis' : ''}`}>
                           {m.thinking ? (
-                            <span className="thinking" aria-label={`${petName}이 생각하는 중`}>
+                            <span className="thinking" aria-label={`${josa(petName, '이', '가')} 생각하는 중`}>
                               <i /><i /><i />
                             </span>
                           ) : (
@@ -972,7 +980,7 @@ export default function ChatApp() {
                   <p className="mh__disclaimer">
                     {mode === 'med'
                       ? '의약품 정보는 참고용이에요. 약은 처방·약사 지시가 우선이에요.'
-                      : `${petName}는 상담사·의사가 아니라 곁을 지키는 친구예요. 많이 힘들 땐 자살예방상담 109.`}
+                      : `${josa(petName, '은', '는')} 상담사·의사가 아니라 곁을 지키는 친구예요. 많이 힘들 땐 자살예방상담 109.`}
                   </p>
                 </form>
               </>

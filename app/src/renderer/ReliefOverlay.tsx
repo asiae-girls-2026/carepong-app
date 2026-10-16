@@ -8,6 +8,13 @@ import { poseUrl, spriteUrl } from './sprites'
 export type ReliefKind = 'breath' | 'meditate'
 type Mode = 'menu' | 'scale' | ReliefKind
 
+// 한글 받침 유무로 조사 선택 — 이름+조사. 받침 있으면 withB("둥"+"과"→"둥과"), 없으면 withoutB("퐁이"+"와"→"퐁이와")
+const josa = (name: string, withB: string, withoutB: string): string => {
+  const c = name.charCodeAt(name.length - 1)
+  const hasBatchim = !Number.isNaN(c) && c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 !== 0
+  return name + (hasBatchim ? withB : withoutB) // 한글 음절이 아니면(영문·숫자 등) 받침 없음으로 처리
+}
+
 interface ReliefOverlayProps {
   petImg: string | null
   petName: string
@@ -203,7 +210,7 @@ export default function ReliefOverlay({ petImg, petName, creature, stage, onComp
           <>
             <div className="relief__center" style={{ marginBottom: 14 }}>
               <p className="relief__title">그럴 땐 잠깐 쉬어가는 게 최고예요</p>
-              <p className="relief__sub">{petName}(이)랑 딱 1분만! 어떤 게 좋아요?</p>
+              <p className="relief__sub">{josa(petName, '이랑', '랑')} 딱 1분만! 어떤 게 좋아요?</p>
             </div>
             <div className="relief__menu">
               {MENU.map((m) => (
@@ -221,7 +228,7 @@ export default function ReliefOverlay({ petImg, petName, creature, stage, onComp
                 <button onClick={() => onChat?.()}>
                   <span className="relief__menu-emoji" aria-hidden>💬</span>
                   <span>
-                    <strong>{petName}과(와) 얘기하기</strong>
+                    <strong>{josa(petName, '과', '와')} 얘기하기</strong>
                     <small>마음을 털어놓고 공감받기</small>
                   </span>
                 </button>
