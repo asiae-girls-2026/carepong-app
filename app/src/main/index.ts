@@ -40,6 +40,7 @@ function petBackup(state: PersistedState): Record<string, unknown> {
     energy: p.stats.energy,
     hearts_total: hearts,
     furniture_stage: furnitureStage(hearts),
+    dnd_manual: state.manualDnd ?? false, // 현재 수동 방해금지 ON/OFF (야간 자동은 dnd_schedule_enabled/start/end로 서버가 산출)
     updated_at: new Date().toISOString(),
   }
 }
@@ -157,7 +158,9 @@ function createWindow(): void {
     },
   })
 
-  win.setAlwaysOnTop(true, 'screen-saver')
+  // 'screen-saver' 레벨은 Windows 작업표시줄보다 위라 작업표시줄을 가린다 → 'floating'으로 낮춤
+  // (펫은 일반 창들 위에 그대로 떠 있고, 작업표시줄은 정상 노출·클릭 가능)
+  win.setAlwaysOnTop(true, 'floating')
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   // 기본은 클릭 통과: 펫 위에 있을 때만 렌더러가 false로 토글한다.
   win.setIgnoreMouseEvents(true, { forward: true })
@@ -172,7 +175,7 @@ function createWindow(): void {
   // 떨어뜨리는 경우가 있어, 2초마다 최상단을 다시 확정한다. (포커스는 뺏지 않음)
   keepOnTopTimer = setInterval(() => {
     if (!win || win.isDestroyed()) return
-    win.setAlwaysOnTop(true, 'screen-saver')
+    win.setAlwaysOnTop(true, 'floating') // 작업표시줄을 가리지 않도록 'floating' 유지(위 참고)
   }, 2000)
   win.on('closed', () => {
     if (keepOnTopTimer) {
