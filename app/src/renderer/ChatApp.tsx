@@ -259,6 +259,7 @@ export default function ChatApp() {
   const [sName, setSName] = useState('') // 설정 탭 약 등록 폼
   const [sTimes, setSTimes] = useState<string[]>(['09:00'])
   const [regNotice, setRegNotice] = useState('') // 중복 등록 안내(비차단) — 알럿 대신 인앱 메시지
+  const [showAddForm, setShowAddForm] = useState(false) // 약 1개 이상일 때: '➕ 약 추가' 눌러야 입력 폼이 펼쳐짐(PM 요청)
   const [confirmDelId, setConfirmDelId] = useState<string | null>(null) // 약 삭제 인앱 2단계 확인(비차단)
   const [copied, setCopied] = useState(false) // 회원번호 복사 얼럿
   const [version, setVersion] = useState('') // 현재 설치 버전 (설정 하단 표시)
@@ -1187,6 +1188,16 @@ export default function ChatApp() {
                       ))}
                     </ul>
                   )}
+                  {/* 약이 1개 이상이면 입력 폼을 숨기고 '➕ 약 추가' 버튼만 노출 — 누르면 폼 펼침(PM 요청) */}
+                  {config.medications.length > 0 && !showAddForm ? (
+                    <button
+                      className="mh__gsubmit"
+                      style={{ marginTop: 8, width: '100%' }}
+                      onClick={() => { setShowAddForm(true); setRegNotice(''); setSelectedProduct(null); setSName(''); setSTimes(['09:00']) }}
+                    >
+                      ➕ 약 추가
+                    </button>
+                  ) : (
                   <div className="mh__guiform" style={{ marginTop: config.medications.length > 0 ? 8 : 4 }}>
                     <input
                       className="mh__ginput"
@@ -1244,11 +1255,23 @@ export default function ChatApp() {
                         setSelectedProduct(null)
                         setSName('')
                         setSTimes(['09:00'])
+                        setShowAddForm(false) // 등록 후 폼을 다시 접어 목록만 보이게(PM 요청)
                       }}
                     >
-                      {config.medications.length > 0 ? '➕ 약 추가' : '약 등록'}
+                      {config.medications.length > 0 ? '등록' : '약 등록'}
                     </button>
+                    {config.medications.length > 0 && (
+                      <button
+                        type="button"
+                        className="mh__gcancel"
+                        style={{ marginTop: 6, width: '100%', background: 'none', border: 'none', color: '#8a8066', fontSize: 12, cursor: 'pointer' }}
+                        onClick={() => { setShowAddForm(false); setRegNotice(''); setSelectedProduct(null); setSName(''); setSTimes(['09:00']) }}
+                      >
+                        취소
+                      </button>
+                    )}
                   </div>
+                  )}
                 </div>
 
 
