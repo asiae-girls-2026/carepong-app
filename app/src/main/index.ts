@@ -175,8 +175,7 @@ function createWindow(): void {
     },
   })
 
-  // 음수 좌표(왼쪽/위 보조 모니터)까지 정확히 덮도록 생성 후 한 번 더 명시 설정
-  win.setBounds(virtualBounds())
+  // (전체 영역 bounds 적용은 whenReady의 applyOverlayBounds에서 1회 수행 — 깜빡임 루프 방지 로직과 함께)
   // 'screen-saver' 레벨은 Windows 작업표시줄보다 위라 작업표시줄을 가린다 → 'floating'으로 낮춤
   // (펫은 일반 창들 위에 그대로 떠 있고, 작업표시줄은 정상 노출·클릭 가능)
   win.setAlwaysOnTop(true, 'floating')
@@ -416,8 +415,25 @@ app.whenReady().then(async () => {
   showCollectNotice()
 
   createWindow()
-  // 모니터 연결·해제·배치 변경 시 오버레이를 새 전체 영역으로 다시 펼친다(펫이 계속 모든 모니터를 오가도록)
-  const respanOverlay = (): void => { if (win && !win.isDestroyed()) win.setBounds(virtualBounds()) }
+  // 모니터 연결·해제·배치 변경 시 오버레이를 새 전체 영역으로 다시 펼친다(펫이 계속 모든 모니터를 오가도록).
+  // ⚠️ display-metrics-changed 는 아주 자주 발생하고, setBounds 자체가 또 이 이벤트를 유발할 수 있어
+  //    (작업표시줄 영역까지 덮는 창이라) 무한 재설정 → 깜빡임 루프가 생긴다.
+  //    그래서 ① 실제로 전체 영역이 바뀐 경우에만 setBounds ② 연속 이벤트는 300ms로 묶기(debounce).
+  let lastBoundsKey = ''
+  const applyOverlayBounds = (): void => {
+    if (!win || win.isDestroyed()) return
+    const vb = virtualBounds()
+    const key = `${vb.x},${vb.y},${vb.width},${vb.height}`
+    if (key === lastBoundsKey) return // 값이 그대로면 재설정하지 않음(깜빡임·루프 차단)
+    lastBoundsKey = key
+    win.setBounds(vb)
+  }
+  applyOverlayBounds() // 최초 1회 적용 + lastBoundsKey 초기화
+  let respanTimer: ReturnType<typeof setTimeout> | null = null
+  const respanOverlay = (): void => {
+    if (respanTimer) clearTimeout(respanTimer)
+    respanTimer = setTimeout(applyOverlayBounds, 300)
+  }
   screen.on('display-added', respanOverlay)
   screen.on('display-removed', respanOverlay)
   screen.on('display-metrics-changed', respanOverlay)
