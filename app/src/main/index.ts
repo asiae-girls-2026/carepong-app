@@ -116,11 +116,14 @@ function openChatWindow(mode: 'med' | 'heart' | 'settings' = 'heart'): void {
     maximizable: false,
     fullscreenable: false,
     title: '미니홈',
+    autoHideMenuBar: true, // 상단 메뉴바(File/Edit/View/Window) 숨김 — View→개발자도구로 레이아웃 깨지는 것 방지
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       sandbox: false,
+      devTools: !app.isPackaged, // 배포본에선 개발자 도구 비활성(미니홈 레이아웃 깨짐 방지). 개발(npm run dev)에선 사용 가능
     },
   })
+  chat.removeMenu() // 메뉴바 완전 제거(Alt로도 안 나오게) — 디벨로퍼 모드 진입 차단
   const url = process.env['ELECTRON_RENDERER_URL']
   if (url) {
     chat.loadURL(`${url}/chat.html?mode=${mode}`)
