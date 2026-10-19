@@ -189,22 +189,24 @@ function createWindow(): void {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  // 펫을 맨 위로 다시 올린다. 'floating'은 작업표시줄을 안 가리는 대신 일반 창보다 살짝만 위라,
-  // 다른 창을 클릭(활성화)하면 그 창이 펫을 덮는다 → 그래서 ① 다른 창이 활성화되는 순간(blur) 즉시,
-  // ② 2초마다 한 번 더, 최상단으로 올려 '가려졌다 보였다' 하지 않게 한다. (포커스는 뺏지 않음 — 펫은 클릭 통과)
-  const raiseTop = (): void => {
-    if (!win || win.isDestroyed()) return
-    win.setAlwaysOnTop(true, 'floating')
-    win.moveTop()
-  }
-  win.on('blur', raiseTop) // 다른 창이 앞으로 올 때 즉시 펫을 다시 최상단으로
-  keepOnTopTimer = setInterval(raiseTop, 2000) // 안전망(이벤트를 놓쳐도 2초 내 복구)
+  // 펫을 맨 위로 다시 올린다('floating'은 작업표시줄을 안 가리는 대신 일반 창보다 살짝만 위라, 다른 창을
+  // 클릭하면 펫을 덮는다). ① 다른 창 활성화 순간(blur) 즉시, ② 2초마다 한 번 더 올린다. (포커스는 뺏지 않음)
+  win.on('blur', raiseOverlayTop) // 다른 창이 앞으로 올 때 즉시 펫을 다시 최상단으로
+  keepOnTopTimer = setInterval(raiseOverlayTop, 2000) // 안전망(이벤트를 놓쳐도 2초 내 복구)
   win.on('closed', () => {
     if (keepOnTopTimer) {
       clearInterval(keepOnTopTimer)
       keepOnTopTimer = null
     }
   })
+}
+
+// 펫 오버레이 창을 최상단으로. 완화(1분 쉬어가기)·알람 모달이 미니홈 뒤로 깔리지 않도록
+// 상호작용 모드로 전환될 때(setClickThrough(false))도 호출한다.
+function raiseOverlayTop(): void {
+  if (!win || win.isDestroyed()) return
+  win.setAlwaysOnTop(true, 'floating')
+  win.moveTop()
 }
 let keepOnTopTimer: ReturnType<typeof setInterval> | null = null
 
@@ -227,6 +229,9 @@ ipcMain.handle('api:selfReport', (_e, payload: Parameters<typeof api.postSelfRep
 ipcMain.handle('api:chat', (_e, message: string) => api.postChat(message))
 ipcMain.on('pet:setClickThrough', (_e, enabled: boolean) => {
   win?.setIgnoreMouseEvents(enabled, { forward: true })
+  // 상호작용 모드(클릭 받기)로 전환 = 펫 클릭/완화(1분 쉬어가기)·알람 모달이 떠야 할 때 →
+  // 펫 창을 최상단으로 올려 미니홈 등 다른 창 뒤로 깔리지 않게 한다.
+  if (!enabled) raiseOverlayTop()
 })
 ipcMain.on('pet:quit', () => app.quit())
 ipcMain.handle('config:load', (): HealthConfig => loadHealth())
