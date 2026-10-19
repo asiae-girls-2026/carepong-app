@@ -239,6 +239,24 @@ export default function ChatApp() {
   const [wizard, setWizard] = useState<Wizard>(null)
   const [mood, setMood] = useState<string | null>(null)
   const [guideOpen, setGuideOpen] = useState(false)
+  // 채팅창 넓게 보기 — 켜면 오른쪽 책갈피 탭을 숨겨 채팅 영역을 넓게 쓴다(건의 반영). 선택은 기기에 기억.
+  const [wideChat, setWideChat] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('mh_wideChat') === '1'
+    } catch {
+      return false
+    }
+  })
+  const toggleWide = (): void =>
+    setWideChat((v) => {
+      const next = !v
+      try {
+        localStorage.setItem('mh_wideChat', next ? '1' : '0')
+      } catch {
+        /* 저장 실패해도 토글은 동작 */
+      }
+      return next
+    })
   const [demoOn, setDemoOn] = useState(false)
   const [gName, setGName] = useState('')
   const [gTimes, setGTimes] = useState<string[]>(['09:00'])
@@ -667,7 +685,7 @@ export default function ChatApp() {
   const messages = feeds[chatMode]
 
   return (
-    <div className={`mh mh--${mode}`}>
+    <div className={`mh mh--${mode}${wideChat ? ' mh--wide' : ''}`}>
       <header className="mh__bar">
         <span className="mh__title">
           {petName}
@@ -676,6 +694,16 @@ export default function ChatApp() {
         <button className="mh__help" onClick={() => setGuideOpen((v) => !v)} title="이 게임 설명 보기">
           ?
         </button>
+        {mode === 'heart' && (
+          <button
+            className="mh__wide"
+            onClick={toggleWide}
+            title={wideChat ? '책갈피 다시 보기' : '채팅창 넓게 보기'}
+            aria-label={wideChat ? '책갈피 다시 보기' : '채팅창 넓게 보기'}
+          >
+            {wideChat ? '⤡' : '⤢'}
+          </button>
+        )}
       </header>
 
       {update && !update.isLatest && (
