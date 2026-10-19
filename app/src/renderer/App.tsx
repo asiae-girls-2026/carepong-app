@@ -198,8 +198,7 @@ export default function App() {
   const chewingRef = useRef(false)
   const eatUntilRef = useRef(0)
   const patUntilRef = useRef(0)
-  // 펫 클릭/탭 인터랙션(쓰다듬·점프 반응)용
-  const pokeBoxRef = useRef<HTMLDivElement>(null) // 점프 바운스 애니메이션 대상(에셋 불필요)
+  // 펫 클릭/탭 인터랙션(쓰다듬 반응)용
   const pokeCountRef = useRef(0)
   const downAtRef = useRef(0)
   const downPosRef = useRef({ x: 0, y: 0 })
@@ -269,26 +268,14 @@ export default function App() {
     bubbleTimer.current = setTimeout(() => setBubble(null), ms)
   }
 
-  // 펫을 톡 눌렀을 때(드래그 아님) 귀여운 반응 — 쓰다듬기 포즈 ↔ 점프 번갈아 + 하트, 가끔 말풍선
+  // 펫을 톡 눌렀을 때(드래그 아님) 귀여운 반응 — 쓰다듬기 포즈(pat_1→pat_2→face_happy) + 하트, 가끔 말풍선.
+  // ※ 점프 애니메이션(.animate 바운스)은 펫 렌더·위치와 충돌해 깜빡임이 생겨 제거(기존 메뉴 '쓰다듬기'와 동일한 안전 경로만 사용).
   const POKE_MSGS = ['히힛, 간지러워요 😆', '기분 좋아요~ 🐾', '또 해주세요! 💛', '집사님이다! 😺']
   const pokePet = (): void => {
     if (!petRef.current) return
     pokeCountRef.current += 1
     setHearts((h) => h + 1)
-    if (pokeCountRef.current % 2 === 0) {
-      // 쓰다듬 반응 (pat_1 → pat_2 → face_happy)
-      patUntilRef.current = Date.now() + PAT_ANIM_MS
-    } else {
-      // 점프 반응 — 이미지 에셋 없이 살짝 통통 튀는 바운스
-      try {
-        pokeBoxRef.current?.animate(
-          [{ transform: 'translateY(0)' }, { transform: 'translateY(-20px)' }, { transform: 'translateY(0)' }],
-          { duration: 480, easing: 'cubic-bezier(.3,1.5,.5,1)' },
-        )
-      } catch {
-        /* 애니메이션 미지원 환경 무시 */
-      }
-    }
+    patUntilRef.current = Date.now() + PAT_ANIM_MS // 쓰다듬 포즈 → 방긋
     if (pokeCountRef.current % 3 === 0) showBubble(pick(POKE_MSGS), 2000)
   }
 
@@ -1283,23 +1270,21 @@ export default function App() {
               </div>
             </div>
           )}
-          <div ref={pokeBoxRef}>
-            <Pet
-              bubbleClass={bubbleCls}
-              creature={pet.creature}
-              stage={pet.stage}
-              generation={pet.generation}
-              animation={anim}
-              chewing={chewing}
-              gauge={gauge && !chatVisible}
-              moving={moving}
-              blink={blink}
-              facing={facing}
-              stats={pet.stats}
-              bubble={reminder || stressAlert ? null : bubble}
-              pose={currentPose}
-            />
-          </div>
+          <Pet
+            bubbleClass={bubbleCls}
+            creature={pet.creature}
+            stage={pet.stage}
+            generation={pet.generation}
+            animation={anim}
+            chewing={chewing}
+            gauge={gauge && !chatVisible}
+            moving={moving}
+            blink={blink}
+            facing={facing}
+            stats={pet.stats}
+            bubble={reminder || stressAlert ? null : bubble}
+            pose={currentPose}
+          />
         </div>
       )}
       {hearts > 0 && (
