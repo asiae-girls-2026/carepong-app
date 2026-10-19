@@ -8,6 +8,29 @@ import { poseUrl, spriteUrl } from './sprites'
 export type ReliefKind = 'breath' | 'meditate'
 type Mode = 'menu' | 'scale' | ReliefKind
 
+// 음성 안내(TTS) — 눈을 감고도 '들이쉬고/내쉬고' 타이밍을 알 수 있게 단계 멘트를 읽어준다.
+// Web Speech API. 음성이 없는 환경(미설치·미지원)은 조용히 무시한다.
+function speak(text: string): void {
+  try {
+    const s = window.speechSynthesis
+    if (!s) return
+    s.cancel() // 이전 멘트 끊고 현재 단계만 말한다(겹침 방지)
+    const u = new SpeechSynthesisUtterance(text)
+    u.lang = 'ko-KR'
+    u.rate = 0.92
+    s.speak(u)
+  } catch {
+    /* TTS 미지원 환경 무시 */
+  }
+}
+function stopSpeak(): void {
+  try {
+    window.speechSynthesis?.cancel()
+  } catch {
+    /* 무시 */
+  }
+}
+
 // 한글 받침 유무로 조사 선택 — 이름+조사. 받침 있으면 withB("둥"+"과"→"둥과"), 없으면 withoutB("퐁이"+"와"→"퐁이와")
 const josa = (name: string, withB: string, withoutB: string): string => {
   const c = name.charCodeAt(name.length - 1)
@@ -50,6 +73,7 @@ function BreathGuide({ creature, stage, petImg, onDone }: { creature: string; st
 
   useEffect(() => {
     setLeft(phase.secs)
+    speak(phase.label) // 현재 단계(들이쉬세요/멈추세요/내쉬세요)를 음성으로 안내
     const iv = setInterval(() => setLeft((s) => Math.max(s - 1, 0)), 1000)
     const to = setTimeout(() => {
       if (phaseIdx === BREATH_PHASES.length - 1) {
@@ -69,6 +93,9 @@ function BreathGuide({ creature, stage, petImg, onDone }: { creature: string; st
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phaseIdx, cycle])
+
+  // 심호흡 화면을 벗어나면(언마운트) 말하던 음성 중단
+  useEffect(() => stopSpeak, [])
 
   const scale = started ? phase.scale : 0.55
   // 들숨=breath_in · 멈춤=breath_in(참은 상태) · 날숨=breath_out
@@ -140,6 +167,9 @@ function MeditateGuide({ creature, stage, petImg, onDone }: { creature: string; 
     MEDIT_LINES.length - 1,
     Math.floor(((MEDIT_SECONDS - left) / MEDIT_SECONDS) * MEDIT_LINES.length),
   )
+  // 안내 문구가 바뀔 때마다 음성으로 읽어준다(눈 감고도 따라갈 수 있게). 화면 벗어나면 중단.
+  useEffect(() => { speak(MEDIT_LINES[lineIdx]) }, [lineIdx])
+  useEffect(() => stopSpeak, [])
   const pct = Math.round(((MEDIT_SECONDS - left) / MEDIT_SECONDS) * 100)
   const meditImg =
     poseUrl(creature, stage, 'meditate') ??
@@ -183,6 +213,21 @@ export default function ReliefOverlay({ petImg, petName, creature, stage, onComp
     }
     return undefined
   }, [done])
+
+  // 심호흡·명상 진행 중엔 '아무 키나/아무 데나 클릭'하면 종료(눈 감고 있다가 바로 빠져나오기 쉽게). 완료 화면(done)에선 제외.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  useEffect(() => {
+    if (done || (mode !== 'breath' && mode !== 'meditate')) return undefined
+    const dismiss = (): void => { stopSpeak(); onCloseRef.current() }
+    window.addEventListener('keydown', dismiss)
+    // 모달 루트의 stopPropagation을 우회하려면 캡처 단계로 들어야 안쪽 클릭도 잡힌다
+    window.addEventListener('pointerdown', dismiss, true) // 마우스/터치 아무 데나 클릭해도 종료
+    return () => {
+      window.removeEventListener('keydown', dismiss)
+      window.removeEventListener('pointerdown', dismiss, true)
+    }
+  }, [mode, done])
 
   return (
     <div className="relief" role="dialog" aria-modal="true" aria-label="스트레스 완화" onPointerDown={(e) => e.stopPropagation()}>
@@ -242,7 +287,7 @@ export default function ReliefOverlay({ petImg, petName, creature, stage, onComp
           <>
             {mode === 'breath' && <BreathGuide creature={creature} stage={stage} petImg={petImg} onDone={finishBreath} />}
             {mode === 'meditate' && <MeditateGuide creature={creature} stage={stage} petImg={petImg} onDone={finishMeditate} />}
-            <button className="relief__dismiss" onClick={onClose}>
+            <button className="relief__dismiss" onClick={() => { stopSpeak(); onClose() }}>
               그만하기
             </button>
           </>
