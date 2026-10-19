@@ -198,6 +198,12 @@ export default function App() {
   const chewingRef = useRef(false)
   const eatUntilRef = useRef(0)
   const patUntilRef = useRef(0)
+  // 펫 클릭/탭 인터랙션(쓰다듬·점프 반응)용
+  const pokeBoxRef = useRef<HTMLDivElement>(null) // 점프 바운스 애니메이션 대상(에셋 불필요)
+  const pokeCountRef = useRef(0)
+  const downAtRef = useRef(0)
+  const downPosRef = useRef({ x: 0, y: 0 })
+  const movedRef = useRef(false)
   const configRef = useRef<HealthConfig>(DEFAULT_HEALTH_CONFIG)
   const intakeRef = useRef<IntakeLog>(EMPTY_INTAKE)
   const reminderRef = useRef<Reminder | null>(null)
@@ -261,6 +267,29 @@ export default function App() {
     setBubble(text)
     if (bubbleTimer.current) clearTimeout(bubbleTimer.current)
     bubbleTimer.current = setTimeout(() => setBubble(null), ms)
+  }
+
+  // 펫을 톡 눌렀을 때(드래그 아님) 귀여운 반응 — 쓰다듬기 포즈 ↔ 점프 번갈아 + 하트, 가끔 말풍선
+  const POKE_MSGS = ['히힛, 간지러워요 😆', '기분 좋아요~ 🐾', '또 해주세요! 💛', '집사님이다! 😺']
+  const pokePet = (): void => {
+    if (!petRef.current) return
+    pokeCountRef.current += 1
+    setHearts((h) => h + 1)
+    if (pokeCountRef.current % 2 === 0) {
+      // 쓰다듬 반응 (pat_1 → pat_2 → face_happy)
+      patUntilRef.current = Date.now() + PAT_ANIM_MS
+    } else {
+      // 점프 반응 — 이미지 에셋 없이 살짝 통통 튀는 바운스
+      try {
+        pokeBoxRef.current?.animate(
+          [{ transform: 'translateY(0)' }, { transform: 'translateY(-20px)' }, { transform: 'translateY(0)' }],
+          { duration: 480, easing: 'cubic-bezier(.3,1.5,.5,1)' },
+        )
+      } catch {
+        /* 애니메이션 미지원 환경 무시 */
+      }
+    }
+    if (pokeCountRef.current % 3 === 0) showBubble(pick(POKE_MSGS), 2000)
   }
 
   // XP 반영 결과 공통 처리 — 레벨업 연출 + 만렙 환생 제안
@@ -328,6 +357,9 @@ export default function App() {
       }
       return settle(addXp(rewarded, grant ? reward.xp : 0))
     })
+    // 건강 항목 실천(알람에 '했어요' 답) → 펫이 기뻐하는 반응: 쓰다듬→방긋 포즈 + 하트
+    patUntilRef.current = Date.now() + PAT_ANIM_MS
+    setHearts((h) => h + 1)
     const wasMed = r.kind === 'medication'
     clearReminder()
     showGauge()
@@ -1179,6 +1211,9 @@ export default function App() {
           onPointerDown={(e) => {
             ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
             drag.current = { dx: e.clientX - position.x, dy: e.clientY - position.y }
+            downAtRef.current = Date.now() // 탭(클릭) 판정용
+            downPosRef.current = { x: e.clientX, y: e.clientY }
+            movedRef.current = false
             longPress.current = setTimeout(() => {
               drag.current = null
               window.petApi.showContextMenu({ dnd: manualDnd, canRebirth: isMaxed(pet) })
@@ -1186,6 +1221,10 @@ export default function App() {
           }}
           onPointerMove={(e) => {
             if (!drag.current) return
+            // 6px 넘게 움직이면 드래그로 간주(탭 아님)
+            if (Math.abs(e.clientX - downPosRef.current.x) > 6 || Math.abs(e.clientY - downPosRef.current.y) > 6) {
+              movedRef.current = true
+            }
             if (longPress.current) {
               clearTimeout(longPress.current)
               longPress.current = null
@@ -1200,6 +1239,8 @@ export default function App() {
           }}
           onPointerUp={(e) => {
             ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
+            // 탭(클릭): 롱프레스 메뉴 안 떴고(=drag.current 유지), 거의 안 움직였고, 짧게 눌렀다 뗌 → 귀여운 반응
+            const isTap = drag.current !== null && !movedRef.current && Date.now() - downAtRef.current < 400
             drag.current = null
             if (longPress.current) {
               clearTimeout(longPress.current)
@@ -1208,6 +1249,7 @@ export default function App() {
             anchorRef.current = { ...positionRef.current }
             targetRef.current = { ...positionRef.current }
             pauseUntilRef.current = Date.now() + 800
+            if (isTap) pokePet()
             saveNow()
           }}
         >
@@ -1241,21 +1283,23 @@ export default function App() {
               </div>
             </div>
           )}
-          <Pet
-            bubbleClass={bubbleCls}
-            creature={pet.creature}
-            stage={pet.stage}
-            generation={pet.generation}
-            animation={anim}
-            chewing={chewing}
-            gauge={gauge && !chatVisible}
-            moving={moving}
-            blink={blink}
-            facing={facing}
-            stats={pet.stats}
-            bubble={reminder || stressAlert ? null : bubble}
-            pose={currentPose}
-          />
+          <div ref={pokeBoxRef}>
+            <Pet
+              bubbleClass={bubbleCls}
+              creature={pet.creature}
+              stage={pet.stage}
+              generation={pet.generation}
+              animation={anim}
+              chewing={chewing}
+              gauge={gauge && !chatVisible}
+              moving={moving}
+              blink={blink}
+              facing={facing}
+              stats={pet.stats}
+              bubble={reminder || stressAlert ? null : bubble}
+              pose={currentPose}
+            />
+          </div>
         </div>
       )}
       {hearts > 0 && (
