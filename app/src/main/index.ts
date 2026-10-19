@@ -189,12 +189,16 @@ function createWindow(): void {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  // 펫이 가끔 다른 창 뒤로 밀리는 문제 보정 — 다른 창/전체화면 앱이 뜰 때 Windows가 최상단 상태를
-  // 떨어뜨리는 경우가 있어, 2초마다 최상단을 다시 확정한다. (포커스는 뺏지 않음)
-  keepOnTopTimer = setInterval(() => {
+  // 펫을 맨 위로 다시 올린다. 'floating'은 작업표시줄을 안 가리는 대신 일반 창보다 살짝만 위라,
+  // 다른 창을 클릭(활성화)하면 그 창이 펫을 덮는다 → 그래서 ① 다른 창이 활성화되는 순간(blur) 즉시,
+  // ② 2초마다 한 번 더, 최상단으로 올려 '가려졌다 보였다' 하지 않게 한다. (포커스는 뺏지 않음 — 펫은 클릭 통과)
+  const raiseTop = (): void => {
     if (!win || win.isDestroyed()) return
-    win.setAlwaysOnTop(true, 'floating') // 작업표시줄을 가리지 않도록 'floating' 유지(위 참고)
-  }, 2000)
+    win.setAlwaysOnTop(true, 'floating')
+    win.moveTop()
+  }
+  win.on('blur', raiseTop) // 다른 창이 앞으로 올 때 즉시 펫을 다시 최상단으로
+  keepOnTopTimer = setInterval(raiseTop, 2000) // 안전망(이벤트를 놓쳐도 2초 내 복구)
   win.on('closed', () => {
     if (keepOnTopTimer) {
       clearInterval(keepOnTopTimer)
