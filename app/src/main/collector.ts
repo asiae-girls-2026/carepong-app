@@ -238,19 +238,26 @@ export function inQuietHours(now: Date, start = '18:30', end = '08:30'): boolean
   return a <= b ? cur >= a && cur < b : cur >= a || cur < b
 }
 
+// 수집 창은 업무시간(08:30~18:30)으로 고정 — 기획서(14.데이터 수집·3.스트레스 감지): "감지·수집 창 = 08:30~18:30 고정(방해금지 토글과 분리)".
+// 이 시간 밖(야간 등)이면 quietEnabled 설정과 무관하게 무조건 수집 차단 → 21:27 같은 야간 창 원천 차단.
+const WORK_START_MIN = 8 * 60 + 30 // 08:30
+const WORK_END_MIN = 18 * 60 + 30 // 18:30
+export function inWorkWindow(now: Date): boolean {
+  const cur = now.getHours() * 60 + now.getMinutes()
+  return cur >= WORK_START_MIN && cur < WORK_END_MIN
+}
+
 /**
- * 1분마다 설정을 보고 수집기를 켜고 끈다.
- * getConfig: 현재 설정 (quietEnabled, quietHours{start,end}) 을 돌려주는 함수
+ * 1분마다 수집기를 켜고 끈다.
+ * 수집은 업무시간(08:30~18:30)에만 — 방해금지 설정(quietEnabled/quietHours)과 무관하게 고정(기획서 A안).
+ * paused(수동 일시중지)면 업무시간이어도 끈다.
  */
 export function scheduleCollector(
-  getConfig: () => { quietEnabled?: boolean; quietHours?: { start: string; end: string } },
+  _getConfig: () => { quietEnabled?: boolean; quietHours?: { start: string; end: string } },
   onWindow: (w: CollectorLine) => void,
 ): void {
   const tick = (): void => {
-    const c = getConfig()
-    const quiet =
-      (c.quietEnabled ?? true) && inQuietHours(new Date(), c.quietHours?.start ?? '18:30', c.quietHours?.end ?? '08:30')
-    const shouldRun = !quiet && !paused
+    const shouldRun = inWorkWindow(new Date()) && !paused // 업무시간 밖이면 무조건 차단(기획서 고정 창)
     if (shouldRun && !collectorRunning()) startCollector(onWindow)
     if (!shouldRun && collectorRunning()) stopCollector()
   }
