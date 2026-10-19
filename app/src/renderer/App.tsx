@@ -279,6 +279,11 @@ export default function App() {
     if (pokeCountRef.current % 3 === 0) showBubble(pick(POKE_MSGS), 2000)
   }
 
+  // 이름 입력창이 떠 있는 동안에만 펫 창이 키보드 포커스를 받게 한다(평소엔 focusable:false로 포커스 핑퐁 방지).
+  useEffect(() => {
+    window.petApi.setFocusable?.(naming)
+  }, [naming])
+
   // XP 반영 결과 공통 처리 — 레벨업 연출 + 만렙 환생 제안
   const settle = (result: { pet: PetModel; leveledUp: boolean; maxed: boolean }): PetModel => {
     if (result.leveledUp) {

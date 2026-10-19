@@ -169,6 +169,7 @@ function createWindow(): void {
     hasShadow: false,
     alwaysOnTop: true,
     skipTaskbar: true,
+    focusable: false, // ★ 포커스를 받지 않는 창 — 활성화 핑퐁(깜빡임·가려짐) 원천 차단. 클릭은 그대로 받음(클릭 통과 토글).
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       sandbox: false,
@@ -189,24 +190,18 @@ function createWindow(): void {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  // 펫을 맨 위로 다시 올린다('floating'은 작업표시줄을 안 가리는 대신 일반 창보다 살짝만 위라, 다른 창을
-  // 클릭하면 펫을 덮는다). ① 다른 창 활성화 순간(blur) 즉시, ② 2초마다 한 번 더 올린다. (포커스는 뺏지 않음)
-  win.on('blur', raiseOverlayTop) // 다른 창이 앞으로 올 때 즉시 펫을 다시 최상단으로
-  keepOnTopTimer = setInterval(raiseOverlayTop, 2000) // 안전망(이벤트를 놓쳐도 2초 내 복구)
+  // 최상단 유지 — 포커스를 안 받는 창(focusable:false)이라 활성화 핑퐁 없이 조용히 위에 떠 있는다.
+  // moveTop/blur 재올리기는 핑퐁·깜빡임을 유발하므로 쓰지 않고, 2초마다 alwaysOnTop만 가볍게 재확정(안전망).
+  keepOnTopTimer = setInterval(() => {
+    if (!win || win.isDestroyed()) return
+    win.setAlwaysOnTop(true, 'floating')
+  }, 2000)
   win.on('closed', () => {
     if (keepOnTopTimer) {
       clearInterval(keepOnTopTimer)
       keepOnTopTimer = null
     }
   })
-}
-
-// 펫 오버레이 창을 최상단으로. 완화(1분 쉬어가기)·알람 모달이 미니홈 뒤로 깔리지 않도록
-// 상호작용 모드로 전환될 때(setClickThrough(false))도 호출한다.
-function raiseOverlayTop(): void {
-  if (!win || win.isDestroyed()) return
-  win.setAlwaysOnTop(true, 'floating')
-  win.moveTop()
 }
 let keepOnTopTimer: ReturnType<typeof setInterval> | null = null
 
@@ -229,9 +224,12 @@ ipcMain.handle('api:selfReport', (_e, payload: Parameters<typeof api.postSelfRep
 ipcMain.handle('api:chat', (_e, message: string) => api.postChat(message))
 ipcMain.on('pet:setClickThrough', (_e, enabled: boolean) => {
   win?.setIgnoreMouseEvents(enabled, { forward: true })
-  // 상호작용 모드(클릭 받기)로 전환 = 펫 클릭/완화(1분 쉬어가기)·알람 모달이 떠야 할 때 →
-  // 펫 창을 최상단으로 올려 미니홈 등 다른 창 뒤로 깔리지 않게 한다.
-  if (!enabled) raiseOverlayTop()
+})
+// 이름 입력(키보드)처럼 키 입력이 필요한 순간에만 잠깐 포커스 허용 → 끝나면 다시 focusable:false로.
+ipcMain.on('pet:setFocusable', (_e, on: boolean) => {
+  if (!win || win.isDestroyed()) return
+  win.setFocusable(on)
+  if (on) win.focus() // 이름 입력창에 키보드 포커스가 가도록
 })
 ipcMain.on('pet:quit', () => app.quit())
 ipcMain.handle('config:load', (): HealthConfig => loadHealth())
