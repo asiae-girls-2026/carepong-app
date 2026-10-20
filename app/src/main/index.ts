@@ -221,7 +221,11 @@ ipcMain.on('api:logEvent', (_e, { event, screen, props }: { event: string; scree
   api.logEvent(event, screen, props ?? {}),
 )
 ipcMain.handle('api:selfReport', (_e, payload: Parameters<typeof api.postSelfReport>[0]) => api.postSelfReport(payload))
-ipcMain.handle('api:chat', (_e, message: string) => api.postChat(message))
+// 공감챗: message + history(직전 대화, 오래된 순). 구버전 호환으로 문자열만 와도 처리.
+ipcMain.handle('api:chat', (_e, arg: string | { message: string; history?: api.ChatTurn[] }) => {
+  if (typeof arg === 'string') return api.postChat(arg)
+  return api.postChat(arg.message, arg.history ?? [])
+})
 ipcMain.on('pet:setClickThrough', (_e, enabled: boolean) => {
   win?.setIgnoreMouseEvents(enabled, { forward: true })
 })

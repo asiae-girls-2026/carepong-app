@@ -283,15 +283,23 @@ function scheduleDailyFlush(): void {
 
 export interface ChatReply {
   reply: string
-  source: string // 'bedrock'
+  source: string // 'bedrock' | 'filter' (서버가 난타로 판정하면 'filter' → 하트 적립 안 함)
   model_id: string
   latency_ms: number
 }
+/** 공감챗 직전 대화 1턴 — 서버에 함께 보내 앞 얘기를 이어받게 한다(오래된 순). 원문은 서버가 저장하지 않음. */
+export interface ChatTurn {
+  role: 'user' | 'pet'
+  text: string
+}
 /** 공감챗 1건 (M05) → 서버 /chat → Bedrock 프롬프트 응답. 503/502/429·타임아웃이면 throw → 호출 측이 규칙 응답(replyEmpathy)으로 폴백.
- *  원문은 서버가 저장하지 않음. 위기 키워드는 호출 전에 앱이 걸러서(isCrisis) 서버에 보내지 않는다. */
-export async function postChat(message: string): Promise<ChatReply> {
+ *  원문은 서버가 저장하지 않음. 위기 키워드는 호출 전에 앱이 걸러서(isCrisis) 서버에 보내지 않는다.
+ *  history: 직전 대화(오래된 순, 최대 5턴=10개). 이번 message 는 포함하지 않는다. 위기·기분체크 문구는 호출 측에서 제외해 넘긴다. */
+export async function postChat(message: string, history: ChatTurn[] = []): Promise<ChatReply> {
   if (initializing) await initializing
-  const r = await call('POST', `${V}/chat`, { message, client_event_id: uid() }, { timeoutMs: 15000 })
+  const body: Record<string, unknown> = { message, client_event_id: uid() }
+  if (history.length > 0) body.history = history // 비어 있으면 아예 안 넣음(기존 서버 호환)
+  const r = await call('POST', `${V}/chat`, body, { timeoutMs: 15000 })
   if (!r || typeof r.reply !== 'string' || !r.reply.trim()) throw new Error('Invalid chat response')
   return r as ChatReply
 }

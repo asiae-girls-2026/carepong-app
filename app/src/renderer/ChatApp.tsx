@@ -12,6 +12,7 @@ import { DEFAULT_HEALTH_CONFIG, DEFAULT_AUX, createMed, addMed, removeMed, updat
 import { EMPTY_INTAKE, recordMed, recordMedDose, medAllTakenToday, medDoseTakenToday, type IntakeLog } from '../core/intake'
 import { startOfLocalDay, currentDueTime } from '../core/scheduler'
 import { replyEmpathy } from '../core/empathy'
+import { earnsHeart } from '../core/gibberish' // 난타(자판 뭉개기) 판별 — 하트 적립 전처리(gibberish_filter.py 규칙 포팅)
 import { parseTimes, tryParseRegister, registerSummary, type ParsedTime } from '../core/medLui'
 import { normalizeAncestors, xpProgress, isMaxed } from '../core/progression'
 import { spriteUrl, poseUrl, roomBgFor, hasPoses, dexImg, creatureScale } from './sprites'
@@ -49,6 +50,8 @@ interface ChatMessage {
   suggestRelief?: boolean
   actions?: { label: string; action: QuickAction }[] // 말풍선 안 선택 버튼
   form?: boolean // 말풍선 안 GUI 등록 폼
+  ts?: number // 작성 시각(ms) — 마음관리 대화 24시간 로컬 보관·만료 판정용. 저장 메시지에만 채움
+  mood?: boolean // 기분 체크 문답(오늘 기분:…)은 서버 history·보관에서 제외하기 위한 표시
 }
 
 type QuickAction = 'reg' | 'ask' | 'reg-lui' | 'reg-gui' | 'home'
@@ -111,6 +114,52 @@ const dayKeyOf = (ts: number): string => {
   const d = new Date(ts)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
+
+// ── 마음관리(공감챗) 대화 이력 로컬 보관 — 이 컴퓨터에만 저장, 서버 전송·암호화 없음(혜윤/TA 요청 ①) ──
+// 24시간 지난 메시지는 불러올 때 + 앱 켜 둔 채 10분마다 자동 삭제. 저장은 마음관리(heart) 탭만.
+const HEARTCHAT_KEY = 'carepong-heartchat'
+const HEARTCHAT_TTL_MS = 24 * 60 * 60 * 1000 // 24시간
+const HEARTCHAT_PRUNE_MS = 10 * 60 * 1000 // 보관 메시지 만료 검사 주기(10분)
+// 저장용으로 추려 담는 필드만(thinking·card·actions·form 등 일회성 UI는 제외)
+interface StoredChat {
+  id: number
+  role: 'user' | 'pet'
+  text: string
+  ts: number
+  crisis?: boolean
+  suggestRelief?: boolean
+  mood?: boolean
+}
+const loadHeartChat = (now: number): ChatMessage[] => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(HEARTCHAT_KEY) ?? '[]') as StoredChat[]
+    if (!Array.isArray(raw)) return []
+    // 24시간 지난 건 버린다(ts 없으면 안전하게 버림)
+    return raw.filter((m) => typeof m?.ts === 'number' && now - m.ts < HEARTCHAT_TTL_MS)
+  } catch {
+    return []
+  }
+}
+const saveHeartChat = (msgs: ChatMessage[]): void => {
+  try {
+    // 완료된(생각중 아님) 메시지만, 저장 필드만 추려 담는다
+    const slim: StoredChat[] = msgs
+      .filter((m) => !m.thinking && typeof m.ts === 'number')
+      .map((m) => ({ id: m.id, role: m.role, text: m.text, ts: m.ts as number, crisis: m.crisis, suggestRelief: m.suggestRelief, mood: m.mood }))
+    localStorage.setItem(HEARTCHAT_KEY, JSON.stringify(slim))
+  } catch {
+    /* 저장 실패해도 대화는 계속 동작 */
+  }
+}
+
+// ② 서버 /chat 에 함께 보낼 직전 대화(오래된 순, 최대 10개=5턴). 이번 메시지는 호출 전에 피드에 아직 없어야 함.
+//   제외: 환영 메시지(id 2) · 위기 문구(서버에 안 보냄) · 기분체크 문답(mood) · 생각중 거품 · 빈 텍스트.
+const HISTORY_MAX = 10
+const buildHistory = (heartFeed: ChatMessage[]): { role: 'user' | 'pet'; text: string }[] =>
+  heartFeed
+    .filter((m) => m.id !== 2 && !m.thinking && !m.crisis && !m.mood && !!m.text.trim())
+    .slice(-HISTORY_MAX) // 가장 최근 10개(이미 오래된 순으로 쌓여 있음)
+    .map((m) => ({ role: m.role, text: m.text }))
 // 설정 숫자 입력 범위 보정(최소/최대) — 범위 밖 입력 시 clamp (QA 6#9·10·11)
 const clampInt = (v: unknown, lo: number, hi: number): number => {
   const n = Math.round(Number(v))
@@ -147,12 +196,8 @@ const TimeSelect = ({ value, onChange }: { value: string; onChange: (v: string) 
 // QA 전용 테스트 버튼 노출 플래그 — 최종 공개 배포 전에는 false로 바꾸고 빌드하세요(일반 사용자에게 숨김).
 const QA_MODE = false // 0.3.0 공개 배포: QA 전용 버튼 숨김
 // 하트 적립 기준(Q2-a · 기획서8): 공백 제외 2자 이상 AND 자음/모음(미완성 글자)만이 아닌 메시지만 적립 — 오용(ㄱㄴㄷ·ㅏㅑ) 방지
-const earnsHeart = (t: string): boolean => {
-  const s = (t || '').replace(/\s/g, '')
-  if (s.length < 2) return false
-  if (/^[\u3131-\u3163]+$/.test(s)) return false
-  return true
-}
+// earnsHeart \ub294 core/gibberish.ts \uc5d0\uc11c import. (gibberish_filter.py \uaddc\uce59 \ud3ec\ud305 \u2014 "\u3148\u31379\u3141\ub824" \ub09c\ud0c0 \ucc28\ub2e8, \u314b\u314b\u314b/\u3160\u3160/\u3131\u3145 \ud1b5\uacfc)
+// \ucd5c\uc885 \ud558\ud2b8\ub294 \uc11c\ubc84 source \uac00 'filter'(\uc11c\ubc84\ub3c4 \ub09c\ud0c0 \ud310\uc815) \uac00 \uc544\ub2d0 \ub54c\ub9cc \uc801\ub9bd \u2014 send() \ucc38\uc870.
 // 두세 줄 요약 — 규칙 기반(Wizard-of-Oz). LLM 연동 시 이 함수만 교체하면 된다.
 const summarizeDay = (e: DiaryEntry): string[] => {
   const lines: string[] = []
@@ -228,9 +273,13 @@ function MiniBar({ icon, value, color, title }: { icon: string; value: number; c
 export default function ChatApp() {
   const initialMode = (new URLSearchParams(location.search).get('mode') as ChatMode) || 'heart'
   const [mode, setMode] = useState<ChatMode>(initialMode)
-  const [feeds, setFeeds] = useState<Record<'med' | 'heart', ChatMessage[]>>({
-    med: [{ id: 1, role: 'pet', text: WELCOME.med, actions: MED_ENTRY_ACTIONS }],
-    heart: [{ id: 2, role: 'pet', text: WELCOME.heart }],
+  // 마음관리 탭은 지난 24시간 대화를 로컬에서 복원(없으면 환영 메시지만). 환영 메시지는 항상 맨 위 고정.
+  const [feeds, setFeeds] = useState<Record<'med' | 'heart', ChatMessage[]>>(() => {
+    const restored = loadHeartChat(Date.now())
+    return {
+      med: [{ id: 1, role: 'pet', text: WELCOME.med, actions: MED_ENTRY_ACTIONS }],
+      heart: [{ id: 2, role: 'pet', text: WELCOME.heart }, ...restored],
+    }
   })
   const [input, setInput] = useState('')
   const [pet, setPet] = useState<Pet | null>(null)
@@ -284,7 +333,8 @@ export default function ChatApp() {
   const [update, setUpdate] = useState<UpdateInfo | null>(null) // 최신 릴리스 비교 결과
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [sessionStart, setSessionStart] = useState<number | null>(null) // 앱 실행 시작 시각 — 스트레칭·휴식 첫 알람 기준
-  const nextId = useRef(3)
+  // 복원된 대화의 id 와 겹치지 않게 다음 id 를 가장 큰 id+1 로 시작(복원 없으면 3)
+  const nextId = useRef(Math.max(2, ...feeds.heart.map((m) => m.id), ...feeds.med.map((m) => m.id)) + 1)
   const feedRef = useRef<HTMLDivElement>(null)
   const modeRef = useRef(mode)
   modeRef.current = mode
@@ -352,10 +402,31 @@ export default function ChatApp() {
     feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: 'smooth' })
   }, [feeds, mode])
 
+  // ① 마음관리 대화 로컬 보관 — heart 피드가 바뀔 때마다 저장(완료 메시지만, 서버 전송 없음)
+  useEffect(() => {
+    saveHeartChat(feeds.heart)
+  }, [feeds.heart])
+
+  // ① 24시간 만료 — 앱을 켜 둔 채로도 10분마다 오래된 메시지를 걸러낸다(환영 메시지 id 2 는 항상 유지)
+  useEffect(() => {
+    const prune = (): void => {
+      const now = Date.now()
+      setFeeds((prev) => {
+        const kept = prev.heart.filter((m) => m.id === 2 || m.thinking || typeof m.ts !== 'number' || now - m.ts < HEARTCHAT_TTL_MS)
+        if (kept.length === prev.heart.length) return prev // 만료된 게 없으면 그대로(불필요한 리렌더 방지)
+        return { ...prev, heart: kept }
+      })
+    }
+    const timer = setInterval(prune, HEARTCHAT_PRUNE_MS)
+    return () => clearInterval(timer)
+  }, [])
+
   const push = (m: Omit<ChatMessage, 'id'>): number => {
     const id = nextId.current++
     const t = modeRef.current === 'heart' ? 'heart' : 'med'
-    setFeeds((prev) => ({ ...prev, [t]: [...prev[t], { ...m, id }] }))
+    // ts(작성 시각) — 마음관리 대화 24시간 보관·만료 판정용. 생각중(thinking) 거품엔 안 붙임(완료 시 resolveThinking 에서 채움)
+    const stamped = m.thinking ? m : { ...m, ts: m.ts ?? Date.now() }
+    setFeeds((prev) => ({ ...prev, [t]: [...prev[t], { ...stamped, id }] }))
     return id
   }
   const resolveThinking = (thinkingId: number, reply: Omit<ChatMessage, 'id'>, delayFrom: number): void => {
@@ -364,7 +435,8 @@ export default function ChatApp() {
     setTimeout(() => {
       setFeeds((prev) => ({
         ...prev,
-        [t]: prev[t].map((m) => (m.id === thinkingId ? { ...m, ...reply, thinking: false } : m)),
+        // 답이 확정되는 순간 ts 를 찍어 24시간 보관 대상에 포함(생각중 거품엔 ts 가 없었음)
+        [t]: prev[t].map((m) => (m.id === thinkingId ? { ...m, ...reply, thinking: false, ts: m.ts ?? Date.now() } : m)),
       }))
     }, wait)
   }
@@ -568,20 +640,27 @@ export default function ChatApp() {
     const text = input.trim()
     if (!text) return
     setInput('')
+    // ② 서버에 보낼 직전 대화 이력(history) — 이번 user 말을 피드에 넣기 "전"의 heart 피드로 만든다(이번 message 제외).
+    //   오래된 순, 최대 10개(5턴). 환영 메시지·위기 문구·기분체크 문답은 뺀다. 마음관리(heart) 탭에서만.
+    const history = mode === 'heart' ? buildHistory(feeds.heart) : []
     push({ role: 'user', text })
-    if (earnsHeart(text)) sendChatPing() // 대화 하트 +1 — 2자 이상·자모만 아닌 메시지만(4#2)
     const thinkingId = push({ role: 'pet', text: '', thinking: true })
     const started = Date.now()
     if (mode === 'med') {
+      if (earnsHeart(text)) sendChatPing() // 약 탭 대화도 기존대로 하트 적립(난타만 거름)
       handleMedMessage(text, thinkingId, started)
     } else {
       recordDiary({ note: text }) // 마음 일기장에 남김
       const local = replyEmpathy(text) // 규칙 응답 — 위기 판정·완화 제안 플래그·서버 실패 시 폴백
-      const logChat = (source: 'rule' | 'bedrock'): void =>
-        // 공감챗봇 메시지 (호출위치표 D) — 원문 저장 X, 길이·키워드 적중 여부·응답 출처만
+      const logChat = (source: 'rule' | 'bedrock' | 'filter'): void =>
+        // 공감챗봇 메시지 (호출위치표 D) — 원문 저장 X, 길이·키워드 적중 여부·응답 출처만. source='filter' = 서버 난타 판정
         window.careApi.logEvent?.('chat_message', 'M05', { len: text.length, keyword_hit: !!(local.crisis || local.suggestRelief), source })
+      // ③ 하트는 "서버 응답 후"에만 — 앱 1차 난타 필터 통과 && 서버가 filter 로 되돌리지 않은 경우에만 +1.
+      const grantHeart = (serverSource: string): void => {
+        if (earnsHeart(text) && serverSource !== 'filter') sendChatPing()
+      }
       if (local.crisis) {
-        // 안전 > 페르소나: 위기 신호는 LLM 에 보내지 않고 전문기관 안내 고정 문구
+        // 안전 > 페르소나: 위기 신호는 LLM 에 보내지 않고(서버 전송 X) 전문기관 안내 고정 문구. 하트는 적립하지 않음.
         logChat('rule')
         resolveThinking(thinkingId, { role: 'pet', text: local.text, crisis: true }, started)
         return
@@ -589,13 +668,17 @@ export default function ChatApp() {
       // 1차(10/14) LLM 연동: 서버 /chat → Bedrock 프롬프트(혜윤). 503/502/429·오프라인이면 규칙 응답으로 폴백.
       // ⚠ 이 블록을 지우면 챗이 규칙 응답으로만 돌아감 (10/14 0.2.5 에서 한 번 덮어써져 사라졌음)
       window.careApi
-        .chat(text)
+        .chat(text, history)
         .then((r) => {
-          logChat('bedrock')
+          // 서버가 난타로 판정하면(source='filter') reply 는 그대로 말풍선에 띄우되 하트는 적립하지 않음
+          logChat(r.source === 'filter' ? 'filter' : 'bedrock')
+          grantHeart(r.source)
           resolveThinking(thinkingId, { role: 'pet', text: r.reply, suggestRelief: local.suggestRelief }, started)
         })
         .catch(() => {
+          // 서버 실패 → 규칙 응답 폴백. 서버 판정을 못 받았으므로 앱 1차 필터만으로 하트 결정.
           logChat('rule')
+          grantHeart('rule')
           resolveThinking(thinkingId, { role: 'pet', text: local.text, suggestRelief: local.suggestRelief }, started)
         })
     }
@@ -649,9 +732,10 @@ export default function ChatApp() {
     recordDiary({ mood: m.emoji, moodLabel: m.label })
     window.careApi.logEvent?.('mood_checked', 'M05', { mood: m.emoji })
     sendChatPing()
-    push({ role: 'user', text: `오늘 기분: ${m.emoji} ${m.label}` })
-    const id = push({ role: 'pet', text: '', thinking: true })
-    resolveThinking(id, { role: 'pet', text: m.reply, suggestRelief: m.relief }, Date.now() - 400)
+    // 기분체크 문답은 mood:true 로 표시 — 서버 history 에 넣지 않는다(TA 요청 ②). 보관은 되어 화면 복원은 됨.
+    push({ role: 'user', text: `오늘 기분: ${m.emoji} ${m.label}`, mood: true })
+    const id = push({ role: 'pet', text: '', thinking: true, mood: true })
+    resolveThinking(id, { role: 'pet', text: m.reply, suggestRelief: m.relief, mood: true }, Date.now() - 400)
   }
 
   // ── 설정 저장 헬퍼 ──
