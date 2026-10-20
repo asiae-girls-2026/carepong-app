@@ -778,16 +778,6 @@ export default function ChatApp() {
         <button className="mh__help" onClick={() => setGuideOpen((v) => !v)} title="이 게임 설명 보기">
           ?
         </button>
-        {mode === 'heart' && (
-          <button
-            className="mh__wide"
-            onClick={toggleWide}
-            title={wideChat ? '책갈피 다시 보기' : '채팅창 넓게 보기'}
-            aria-label={wideChat ? '책갈피 다시 보기' : '채팅창 넓게 보기'}
-          >
-            {wideChat ? '⤡' : '⤢'}
-          </button>
-        )}
       </header>
 
       {update && !update.isLatest && (
@@ -972,6 +962,15 @@ export default function ChatApp() {
               <>
                 <div className="mh__chips">
                   <button className="mh__chip" onClick={() => window.careApi.openRelief()}>🫧 1분 쉬어가기</button>
+                  <button
+                    className="mh__wide"
+                    style={{ marginLeft: 'auto' }}
+                    onClick={toggleWide}
+                    title={wideChat ? '책갈피 다시 보기' : '채팅창 넓게 보기'}
+                    aria-label={wideChat ? '책갈피 다시 보기' : '채팅창 넓게 보기'}
+                  >
+                    {wideChat ? '⤡' : '⤢'}
+                  </button>
                 </div>
                 {!mood && !moodDoneToday && (
                 <div className="mh__card">
