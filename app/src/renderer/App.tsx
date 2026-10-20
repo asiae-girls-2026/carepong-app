@@ -192,6 +192,7 @@ export default function App() {
   const anchorRef = useRef({ x: 80, y: 80 })
   const targetRef = useRef({ x: 80, y: 80 })
   const walkUntilRef = useRef(0)
+  const cursorRef = useRef({ x: 80, y: 80 }) // 최신 커서 위치(오버레이 창 기준) — 산책 중 따라오기 목표로만 사용
   const pauseUntilRef = useRef(0)
   const movingRef = useRef(false)
   const facingRef = useRef(1)
@@ -666,9 +667,18 @@ export default function App() {
       const maxX = Math.max(1, window.innerWidth - sizeRef.current)
       const maxY = Math.max(1, window.innerHeight - sizeRef.current)
       const clampX = (v: number): number => Math.max(0, Math.min(v, maxX))
+      const clampY = (v: number): number => Math.max(0, Math.min(v, maxY))
+      // 산책 중엔 커서를 목표로 — 반려동물이 산책하자며 커서를 졸졸 따라오는 느낌. 펫 중심이 커서에 오도록 반칸 보정.
+      // (산책이 끝나면 walking=false → 이 블록을 안 타고 평소 자율 걷기로 자동 복귀 = 따라오기 자동 해제)
+      const cursorTarget = (): { x: number; y: number } => {
+        const c = cursorRef.current
+        return { x: clampX(c.x - sizeRef.current / 2), y: clampY(c.y - sizeRef.current / 2) }
+      }
+      // 산책 중엔 매 틱 커서 쪽으로 목표를 갱신해 부드럽게 따라오게 한다.
+      if (walking) targetRef.current = cursorTarget()
       const pickTarget = (): void => {
         if (walking) {
-          targetRef.current = { x: Math.random() * maxX, y: Math.random() * maxY }
+          targetRef.current = cursorTarget()
         } else {
           const a = anchorRef.current
           targetRef.current = { x: clampX(a.x + (Math.random() * 2 - 1) * IDLE_RANGE), y: a.y }
@@ -898,6 +908,7 @@ export default function App() {
         window.careApi.stressEvent({ type: 'mouse', x: e.screenX, y: e.screenY, t: nowMs })
       }
       const cursor = { x: e.clientX, y: e.clientY }
+      cursorRef.current = cursor // 산책 중 따라오기 목표로 쓰려고 최신 커서 위치만 저장(평소엔 안 씀)
       const overPet = isPointInRect(cursor, positionRef.current, {
         width: sizeRef.current,
         height: sizeRef.current,
