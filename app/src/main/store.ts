@@ -8,6 +8,7 @@ export interface PersistedState {
   pet: Pet
   position: { x: number; y: number }
   lastTickAt: number
+  manualDnd?: boolean // 수동 방해금지 ON/OFF — 저장·복원용(야간 자동은 health의 dnd_schedule로 산출). 구버전 저장본 호환 위해 옵셔널
 }
 
 const store = new Store<{
