@@ -239,6 +239,18 @@ ipcMain.on('pet:setFocusable', (_e, on: boolean) => {
 })
 // 스트레스 알림·완화 팝업이 뜰 때 렌더러가 호출 → 펫 창을 확실히 최상단으로(가려져 있어도 즉시 위로).
 ipcMain.on('pet:raiseTop', () => raisePetTop())
+// 듀얼모니터: 완화 모달이 "두 모니터 합친 영역의 중앙"(=모니터 경계)에 떠서 반으로 쪼개지는 문제 해결용.
+// 렌더러가 펫의 창-기준 좌표(x,y)를 주면, 그 점이 속한 모니터 영역을 "창 기준 좌표"로 돌려준다.
+// 오버레이 창은 virtualBounds() 원점(vb.x,vb.y)에서 시작하므로, 디스플레이 영역에서 그 원점을 빼면 창 기준이 된다.
+ipcMain.handle('pet:displayForPoint', (_e, pt: { x: number; y: number }) => {
+  const vb = virtualBounds()
+  // 창 기준(x,y) → 실제 화면 절대좌표
+  const abs = { x: vb.x + (pt?.x ?? 0), y: vb.y + (pt?.y ?? 0) }
+  const d = screen.getDisplayNearestPoint(abs) // 그 점이 속한(또는 가장 가까운) 모니터
+  const b = d.bounds
+  // 다시 창 기준 좌표로 환산해서 돌려준다
+  return { left: b.x - vb.x, top: b.y - vb.y, width: b.width, height: b.height }
+})
 ipcMain.on('pet:quit', () => app.quit())
 ipcMain.handle('config:load', (): HealthConfig => loadHealth())
 ipcMain.on('config:save', (_e, config: HealthConfig) => {

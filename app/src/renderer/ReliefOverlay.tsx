@@ -2,7 +2,7 @@
 // 완료 시에만 보상 · 거절/중단해도 페널티 없음.
 // 심호흡 UI는 Apple Watch Breathe·Calm Breathe Bubble 패턴:
 // 들이쉴 때 버블이 크게 팽창, 내쉴 때 수축 + 큰 단계 라벨·카운트다운으로 타이밍을 명확히.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { poseUrl, spriteUrl } from './sprites'
 
 export type ReliefKind = 'breath' | 'meditate'
@@ -50,6 +50,7 @@ interface ReliefOverlayProps {
   showChat?: boolean // Route1: 완화메뉴에 [{펫이름}과 얘기하기] 3번째 노출
   onScale?: (v: number) => void // 1~5 선택 기록
   onChat?: () => void // 공감챗봇 열기
+  regionStyle?: CSSProperties // 듀얼모니터: 펫이 있는 모니터 영역으로 모달을 한정(경계에 걸쳐 쪼개짐 방지). 없으면 전체 화면.
 }
 
 const BREATH_PHASES = [
@@ -198,7 +199,7 @@ const MENU = [
 ]
 
 /** 스트레스 임계 초과 시 뜨는 즉시 완화 오버레이 */
-export default function ReliefOverlay({ petImg, petName, creature, stage, onComplete, onClose, onSelect, askScale, showChat, onScale, onChat }: ReliefOverlayProps) {
+export default function ReliefOverlay({ petImg, petName, creature, stage, onComplete, onClose, onSelect, askScale, showChat, onScale, onChat, regionStyle }: ReliefOverlayProps) {
   const [mode, setMode] = useState<Mode>(askScale ? 'scale' : 'menu')
   const [done, setDone] = useState<ReliefKind | null>(null)
   const onCompleteRef = useRef(onComplete)
@@ -230,7 +231,7 @@ export default function ReliefOverlay({ petImg, petName, creature, stage, onComp
   }, [mode, done])
 
   return (
-    <div className="relief" role="dialog" aria-modal="true" aria-label="스트레스 완화" onPointerDown={(e) => e.stopPropagation()}>
+    <div className="relief" role="dialog" aria-modal="true" aria-label="스트레스 완화" style={regionStyle} onPointerDown={(e) => e.stopPropagation()}>
       <div className="relief__card">
         {done ? (
           <div className="relief__center">

@@ -10,6 +10,9 @@ const petApi = {
   setClickThrough: (enabled: boolean): void => ipcRenderer.send('pet:setClickThrough', enabled),
   setFocusable: (on: boolean): void => ipcRenderer.send('pet:setFocusable', on), // 이름 입력 등 키보드 필요 시만 true
   raiseTop: (): void => ipcRenderer.send('pet:raiseTop'), // 스트레스 알림·완화 팝업 뜰 때 펫 창을 최상단으로
+  // 듀얼모니터: 펫의 창-기준 좌표가 속한 모니터 영역(창 기준 left/top/width/height)을 돌려준다 — 완화 모달을 그 모니터 중앙에 띄우기 위함
+  displayForPoint: (pt: { x: number; y: number }): Promise<{ left: number; top: number; width: number; height: number }> =>
+    ipcRenderer.invoke('pet:displayForPoint', pt),
 
   quit: (): void => ipcRenderer.send('pet:quit'),
   showContextMenu: (state: { dnd: boolean; canRebirth?: boolean }): void => ipcRenderer.send('pet:showContextMenu', state),

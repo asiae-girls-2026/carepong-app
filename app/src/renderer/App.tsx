@@ -1,6 +1,6 @@
 // 케어퐁 오버레이 — 프로토타입 (규칙서 9/22·9/23 기반)
 // 죽음·친구·교배 없음. 돌봄 3종 + 알람 4종 + 스트레스 개입 + 만렙 환생.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import Pet from './Pet'
 import ReliefOverlay, { type ReliefKind } from './ReliefOverlay'
 import { decayDropsBetween } from './petEngine'
@@ -172,6 +172,8 @@ export default function App() {
   const [rebirthPrompt, setRebirthPrompt] = useState(false)
   const [stressAlert, setStressAlert] = useState(false)
   const [reliefOpen, setReliefOpen] = useState(false)
+  // 듀얼모니터: 완화 모달을 펫이 있는 모니터 영역에만 띄우기 위한 style(경계에 걸쳐 쪼개짐 방지). null=전체 화면.
+  const [reliefRegion, setReliefRegion] = useState<CSSProperties | null>(null)
   const [reliefRoute1, setReliefRoute1] = useState(false) // Route1(감지 팝업)=1~5 선택+대화 선택지, Route2=2선택
   const [petOpacity, setPetOpacity] = useState(40) // 케어펫 투명도 %(방해금지 중) — 설정 연동
 
@@ -812,6 +814,25 @@ export default function App() {
     interactive.current = true
     window.petApi.setClickThrough(false)
     window.petApi.raiseTop?.() // 완화 팝업은 반드시 눌러야 하므로 다른 창에 가려지지 않게 최상단으로
+    void updateReliefRegion() // 듀얼모니터: 펫이 있는 모니터 영역으로 모달을 한정(경계에 걸쳐 쪼개짐 방지)
+  }
+  // 펫 중심이 속한 모니터 영역을 받아, 완화 모달을 그 모니터 안에만 깔도록 style 을 만든다.
+  // 모니터가 하나뿐이거나 조회 실패 시엔 null → 기존처럼 전체 화면(.relief inset:0) 사용.
+  const updateReliefRegion = async (): Promise<void> => {
+    try {
+      const api = window.petApi as { displayForPoint?: (pt: { x: number; y: number }) => Promise<{ left: number; top: number; width: number; height: number }> }
+      if (!api.displayForPoint) { setReliefRegion(null); return }
+      const c = { x: positionRef.current.x + sizeRef.current / 2, y: positionRef.current.y + sizeRef.current / 2 }
+      const r = await api.displayForPoint(c)
+      // 전체 창과 영역이 사실상 같으면(단일 모니터) 굳이 한정하지 않음
+      if (r && (r.left !== 0 || r.top !== 0 || r.width !== window.innerWidth || r.height !== window.innerHeight)) {
+        setReliefRegion({ position: 'fixed', inset: 'auto', left: r.left, top: r.top, width: r.width, height: r.height })
+      } else {
+        setReliefRegion(null)
+      }
+    } catch {
+      setReliefRegion(null)
+    }
   }
   // 완화 메뉴에서 심호흡/명상 선택 (호출위치표 D: relief_selected)
   const selectRelief = (kind: ReliefKind): void => {
@@ -1386,6 +1407,7 @@ export default function App() {
           showChat={reliefRoute1}
           onScale={reportStressScale}
           onChat={chatRelief}
+          regionStyle={reliefRegion ?? undefined}
         />
       )}
     </div>
