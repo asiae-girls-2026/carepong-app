@@ -290,6 +290,7 @@ export default function ReliefOverlay({ petImg, petName, creature, stage, onComp
             <button className="relief__dismiss" onClick={() => { stopSpeak(); onClose() }}>
               그만하기
             </button>
+            <p className="relief__hint">화면 아무 곳이나 누르거나 아무 키를 눌러도 끝나요</p>
           </>
         )}
       </div>
