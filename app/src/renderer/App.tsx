@@ -192,7 +192,6 @@ export default function App() {
   const anchorRef = useRef({ x: 80, y: 80 })
   const targetRef = useRef({ x: 80, y: 80 })
   const walkUntilRef = useRef(0)
-  const cursorRef = useRef({ x: 80, y: 80 }) // 최신 커서 위치(오버레이 창 기준) — 산책 중 따라오기 목표로만 사용
   const pauseUntilRef = useRef(0)
   const movingRef = useRef(false)
   const facingRef = useRef(1)
@@ -279,11 +278,6 @@ export default function App() {
     patUntilRef.current = Date.now() + PAT_ANIM_MS // 쓰다듬 포즈 → 방긋
     if (pokeCountRef.current % 3 === 0) showBubble(pick(POKE_MSGS), 2000)
   }
-
-  // 이름 입력창이 떠 있는 동안에만 펫 창이 키보드 포커스를 받게 한다(평소엔 focusable:false로 포커스 핑퐁 방지).
-  useEffect(() => {
-    window.petApi.setFocusable?.(naming)
-  }, [naming])
 
   // XP 반영 결과 공통 처리 — 레벨업 연출 + 만렙 환생 제안
   const settle = (result: { pet: PetModel; leveledUp: boolean; maxed: boolean }): PetModel => {
@@ -668,17 +662,24 @@ export default function App() {
       const maxY = Math.max(1, window.innerHeight - sizeRef.current)
       const clampX = (v: number): number => Math.max(0, Math.min(v, maxX))
       const clampY = (v: number): number => Math.max(0, Math.min(v, maxY))
-      // 산책 중엔 커서를 목표로 — 반려동물이 산책하자며 커서를 졸졸 따라오는 느낌. 펫 중심이 커서에 오도록 반칸 보정.
-      // (산책이 끝나면 walking=false → 이 블록을 안 타고 평소 자율 걷기로 자동 복귀 = 따라오기 자동 해제)
-      const cursorTarget = (): { x: number; y: number } => {
-        const c = cursorRef.current
-        return { x: clampX(c.x - sizeRef.current / 2), y: clampY(c.y - sizeRef.current / 2) }
+      // 경계 밖 복귀 보정 — 해상도·배율 변경이나 모니터 연결/해제로 오버레이가 줄면 펫이 화면 밖에 남을 수 있다.
+      // (산책 중 가장자리에서 멈췄다가 창이 줄어든 경우 등) 이때 위치·앵커·목표를 화면 안으로 끌어와 "나갔다가 안 돌아옴"을 막는다.
+      // 경계 안(정상)일 땐 값이 그대로라 평소 움직임엔 영향이 없다.
+      {
+        const cur = positionRef.current
+        const inX = clampX(cur.x)
+        const inY = clampY(cur.y)
+        if (inX !== cur.x || inY !== cur.y) {
+          const fixed = { x: inX, y: inY }
+          positionRef.current = fixed
+          setPosition(fixed)
+          anchorRef.current = { x: clampX(anchorRef.current.x), y: clampY(anchorRef.current.y) }
+          targetRef.current = { x: clampX(targetRef.current.x), y: clampY(targetRef.current.y) }
+        }
       }
-      // 산책 중엔 매 틱 커서 쪽으로 목표를 갱신해 부드럽게 따라오게 한다.
-      if (walking) targetRef.current = cursorTarget()
       const pickTarget = (): void => {
         if (walking) {
-          targetRef.current = cursorTarget()
+          targetRef.current = { x: Math.random() * maxX, y: Math.random() * maxY }
         } else {
           const a = anchorRef.current
           targetRef.current = { x: clampX(a.x + (Math.random() * 2 - 1) * IDLE_RANGE), y: a.y }
@@ -908,7 +909,6 @@ export default function App() {
         window.careApi.stressEvent({ type: 'mouse', x: e.screenX, y: e.screenY, t: nowMs })
       }
       const cursor = { x: e.clientX, y: e.clientY }
-      cursorRef.current = cursor // 산책 중 따라오기 목표로 쓰려고 최신 커서 위치만 저장(평소엔 안 씀)
       const overPet = isPointInRect(cursor, positionRef.current, {
         width: sizeRef.current,
         height: sizeRef.current,
