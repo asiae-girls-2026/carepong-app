@@ -811,6 +811,7 @@ export default function App() {
     setReliefOpen(true)
     interactive.current = true
     window.petApi.setClickThrough(false)
+    window.petApi.raiseTop?.() // 완화 팝업은 반드시 눌러야 하므로 다른 창에 가려지지 않게 최상단으로
   }
   // 완화 메뉴에서 심호흡/명상 선택 (호출위치표 D: relief_selected)
   const selectRelief = (kind: ReliefKind): void => {
@@ -896,6 +897,7 @@ export default function App() {
       setStressAlert(true)
       interactive.current = true
       window.petApi.setClickThrough(false)
+      window.petApi.raiseTop?.() // 스트레스 알림도 반드시 눌러야 하므로 최상단으로
       // 서버(postWindow) 응답 맥락 저장 — 자가보고(postSelfReport)에 실어 보냄 (호출위치표 B)
       promptCtxRef.current = {
         windowId: s.windowId ?? null,

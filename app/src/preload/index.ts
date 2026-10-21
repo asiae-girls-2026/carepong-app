@@ -9,6 +9,7 @@ const petApi = {
   save: (state: PersistedState): void => ipcRenderer.send('pet:save', state),
   setClickThrough: (enabled: boolean): void => ipcRenderer.send('pet:setClickThrough', enabled),
   setFocusable: (on: boolean): void => ipcRenderer.send('pet:setFocusable', on), // 이름 입력 등 키보드 필요 시만 true
+  raiseTop: (): void => ipcRenderer.send('pet:raiseTop'), // 스트레스 알림·완화 팝업 뜰 때 펫 창을 최상단으로
 
   quit: (): void => ipcRenderer.send('pet:quit'),
   showContextMenu: (state: { dnd: boolean; canRebirth?: boolean }): void => ipcRenderer.send('pet:showContextMenu', state),

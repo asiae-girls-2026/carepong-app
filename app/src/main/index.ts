@@ -191,9 +191,20 @@ function createWindow(): void {
   }
 
   // 최상단 유지 — alwaysOnTop(true,'floating')은 창 생성 시 1회 설정으로 OS가 계속 유지한다.
-  // 과거엔 2초마다 setAlwaysOnTop을 재확정했으나(안전망), 투명·클릭통과 오버레이에선 그 재확정이
-  // z-order 재삽입→리페인트를 일으켜 다른 창 위에서 "사라졌다 생겼다" 깜빡임을 만들었다. 그래서 타이머 제거.
-  // (focusable:false 로 활성화 핑퐁은 이미 차단됨 / 전체화면 위 노출은 setVisibleOnAllWorkspaces 로 커버)
+  // 단, 다른 창을 클릭해 그 창이 활성화되면(focusable:false여도) 펫이 그 뒤로 가려질 수 있다.
+  // 2초마다 무조건 재확정하면 깜빡임이 생기므로, "다른 창에 가려지는 순간(blur)"에만 한 번 다시 올린다.
+  // blur는 포커스를 뺏길 때만 발생 → 평소엔 호출 0회라 깜빡임이 없고, 가려졌을 때만 조용히 복구된다.
+  win.on('blur', () => {
+    if (!win || win.isDestroyed()) return
+    win.setAlwaysOnTop(true, 'floating')
+  })
+}
+
+// 스트레스 알림·완화 팝업처럼 "반드시 눌러야 하는" UI가 뜰 때, 펫 창을 확실히 최상단으로 끌어올린다.
+export function raisePetTop(): void {
+  if (!win || win.isDestroyed()) return
+  win.setAlwaysOnTop(true, 'floating')
+  win.moveTop() // 같은 레벨 안에서도 맨 위로 (가려진 상태 즉시 해소)
 }
 
 ipcMain.handle('pet:load', (): PersistedState | null => loadState())
@@ -226,6 +237,8 @@ ipcMain.on('pet:setFocusable', (_e, on: boolean) => {
   win.setFocusable(on)
   if (on) win.focus() // 이름 입력창에 키보드 포커스가 가도록
 })
+// 스트레스 알림·완화 팝업이 뜰 때 렌더러가 호출 → 펫 창을 확실히 최상단으로(가려져 있어도 즉시 위로).
+ipcMain.on('pet:raiseTop', () => raisePetTop())
 ipcMain.on('pet:quit', () => app.quit())
 ipcMain.handle('config:load', (): HealthConfig => loadHealth())
 ipcMain.on('config:save', (_e, config: HealthConfig) => {
