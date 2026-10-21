@@ -190,20 +190,11 @@ function createWindow(): void {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  // 최상단 유지 — 포커스를 안 받는 창(focusable:false)이라 활성화 핑퐁 없이 조용히 위에 떠 있는다.
-  // moveTop/blur 재올리기는 핑퐁·깜빡임을 유발하므로 쓰지 않고, 2초마다 alwaysOnTop만 가볍게 재확정(안전망).
-  keepOnTopTimer = setInterval(() => {
-    if (!win || win.isDestroyed()) return
-    win.setAlwaysOnTop(true, 'floating')
-  }, 2000)
-  win.on('closed', () => {
-    if (keepOnTopTimer) {
-      clearInterval(keepOnTopTimer)
-      keepOnTopTimer = null
-    }
-  })
+  // 최상단 유지 — alwaysOnTop(true,'floating')은 창 생성 시 1회 설정으로 OS가 계속 유지한다.
+  // 과거엔 2초마다 setAlwaysOnTop을 재확정했으나(안전망), 투명·클릭통과 오버레이에선 그 재확정이
+  // z-order 재삽입→리페인트를 일으켜 다른 창 위에서 "사라졌다 생겼다" 깜빡임을 만들었다. 그래서 타이머 제거.
+  // (focusable:false 로 활성화 핑퐁은 이미 차단됨 / 전체화면 위 노출은 setVisibleOnAllWorkspaces 로 커버)
 }
-let keepOnTopTimer: ReturnType<typeof setInterval> | null = null
 
 ipcMain.handle('pet:load', (): PersistedState | null => loadState())
 let lastPetBackupKey: string | null = null // 값이 바뀔 때만 서버 전송(15초마다 과다 호출 방지)
