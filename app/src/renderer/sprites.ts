@@ -39,9 +39,9 @@ export function petPixelSize(_stage: number): number {
 }
 
 // 캐릭터별 표시 배율. 원본 아트의 여백 차이 보정용.
-// 고양이(cat)는 내용에 딱 맞게 크롭(여백 거의 없음)된 반면, 드래곤(dragon)은 512×512 정사각형이라
-// 같은 박스에 넣으면 몸통이 더 꽉 차 커 보인다 → 드래곤만 줄여 고양이와 체감 크기를 맞춘다.
-const CREATURE_SCALE: Record<string, number> = { dragon: 0.65 }
+// (2026-10-22) 캐릭터 스프라이트를 512×512 규격으로 통일(전 레벨·전 캐릭터 idle 300px·바닥선 y=472)하여
+// cat·dragon 체감 크기가 이미 맞으므로 코드 보정은 제거. 이후 여백이 다른 새 캐릭터가 생기면 여기에만 추가.
+const CREATURE_SCALE: Record<string, number> = {}
 export function creatureScale(creature: string): number {
   return CREATURE_SCALE[creature] ?? 1
 }
