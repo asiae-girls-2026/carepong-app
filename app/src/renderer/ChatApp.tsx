@@ -38,7 +38,9 @@ function fmtClock(d: Date): string {
   return `${ampm} ${h}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-type ChatMode = 'med' | 'heart' | 'settings' | 'archive'
+// 탭: home(마이룸) · med(약지도) · heart(마음관리) · report(리포트, 준비중) · settings(설정)
+// archive는 과거 '도감+일기' 탭 — 1단계에서 도감→home, 일기→heart 로 옮기며 탭에선 제거(타입은 호환 위해 유지)
+type ChatMode = 'home' | 'med' | 'heart' | 'report' | 'settings' | 'archive'
 
 interface ChatMessage {
   id: number
@@ -271,7 +273,7 @@ function MiniBar({ icon, value, color, title }: { icon: string; value: number; c
 }
 
 export default function ChatApp() {
-  const initialMode = (new URLSearchParams(location.search).get('mode') as ChatMode) || 'heart'
+  const initialMode = (new URLSearchParams(location.search).get('mode') as ChatMode) || 'home'
   const [mode, setMode] = useState<ChatMode>(initialMode)
   // 마음관리 탭은 지난 24시간 대화를 로컬에서 복원(없으면 환영 메시지만). 환영 메시지는 항상 맨 위 고정.
   const [feeds, setFeeds] = useState<Record<'med' | 'heart', ChatMessage[]>>(() => {
@@ -789,6 +791,25 @@ export default function ChatApp() {
         </div>
       )}
 
+      {/* ── 상단 가로 탭 (마이룸·약지도·마음관리·리포트·설정) ── */}
+      <nav className="mh__toptabs">
+        <button className={`mh__toptab${mode === 'home' ? ' on' : ''}`} onClick={() => setMode('home')}>
+          <span className="mh__toptab-ico" aria-hidden>🏠</span><span className="mh__toptab-txt">마이룸</span>
+        </button>
+        <button className={`mh__toptab${mode === 'med' ? ' on' : ''}`} onClick={() => setMode('med')}>
+          <span className="mh__toptab-ico" aria-hidden>💊</span><span className="mh__toptab-txt">약지도</span>
+        </button>
+        <button className={`mh__toptab${mode === 'heart' ? ' on' : ''}`} onClick={() => setMode('heart')}>
+          <span className="mh__toptab-ico" aria-hidden>💛</span><span className="mh__toptab-txt">마음관리</span>
+        </button>
+        <button className={`mh__toptab${mode === 'report' ? ' on' : ''}`} onClick={() => setMode('report')}>
+          <span className="mh__toptab-ico" aria-hidden>📊</span><span className="mh__toptab-txt">리포트</span>
+        </button>
+        <button className={`mh__toptab${mode === 'settings' ? ' on' : ''}`} onClick={() => setMode('settings')}>
+          <span className="mh__toptab-ico" aria-hidden>⚙️</span><span className="mh__toptab-txt">설정</span>
+        </button>
+      </nav>
+
       <div className="mh__frame">
         {guideOpen && (
           <div className="mh__guide" role="dialog" aria-label="키우기 공략집">
@@ -856,6 +877,8 @@ export default function ChatApp() {
             </p>
           </div>
         )}
+        {/* ── 마이룸(home) 탭에서만: 미니룸 + 펫상태 + 오늘의 하트 ── */}
+        {mode === 'home' && (<>
         {/* 미니룸 — 가구: 창문·액자·시계·책장·침대·화분·스탠드 */}
         <div className="mh__room">
           {/* 방꾸미기 — 누적 하트 단계별 전체 방 배경 이미지 (0=빈방) */}
@@ -913,10 +936,56 @@ export default function ChatApp() {
             </span>
           </div>
         )}
+        </>)}
 
         <div className="mh__body">
           <div className="mh__content">
             {unlockMsg && <div className="mh__unlock" role="status">{unlockMsg}</div>}
+            {/* ── 🏠 마이룸(home) — 펫 도감 (미니룸·상태·하트는 위 고정 영역에 표시) ── */}
+            {mode === 'home' && (
+              <div className="mh__settings">
+                <div className="mh__card">
+                  <div className="mh__card-head">📖 펫 도감</div>
+                  <div className="mh__dexrow">
+                    {(pet?.speciesOrder && pet.speciesOrder.length > 0 ? pet.speciesOrder : DEFAULT_DEX_ORDER).map((creature, i) => {
+                      const order = i + 1 // 랜덤 첫 등장 캐릭터가 1번
+                      const anc = normalizeAncestors(pet?.ancestors)
+                      const isActive = pet?.creature === creature
+                      const ancMatch = anc.find((a) => a.creature === creature)
+                      const acquired = hasPoses(creature) && (isActive || !!ancMatch)
+                      const url = acquired
+                        ? poseUrl(creature, isActive ? pet?.stage ?? 1 : 5, 'idle')
+                        : undefined
+                      const nm = isActive ? petName : ancMatch?.name ?? BETA_NAMES[creature] ?? creature
+                      return (
+                        <div key={creature} className={`mh__dexslot${acquired ? ' mh__dexslot--got' : ''}`}>
+                          <div className="mh__dexart">
+                            {acquired && url ? (
+                              <img className={`mh__deximg${creatureScale(creature) !== 1 ? ' mh__deximg--sq' : ''}`} src={url} alt={nm} draggable={false} />
+                            ) : (
+                              <img className="mh__deximg mh__deximg--myst" src={dexImg('mystery')} alt="미공개" draggable={false} />
+                            )}
+                            <img className="mh__dexframe" src={dexImg('frame')} alt="" draggable={false} />
+                            <span className="mh__dexno">{order}</span>
+                          </div>
+                          <small className="mh__dexname">{acquired ? nm : '???'}</small>
+                        </div>
+                      )
+                    })}
+                    {/* 미공개 자리 — 추후 추가될 3번째 캐릭터(지금은 항상 미스터리 박스) */}
+                    <div key="future" className="mh__dexslot">
+                      <div className="mh__dexart">
+                        <img className="mh__deximg mh__deximg--myst" src={dexImg('mystery')} alt="미공개" draggable={false} />
+                        <img className="mh__dexframe" src={dexImg('frame')} alt="" draggable={false} />
+                        <span className="mh__dexno">{(pet?.speciesOrder?.length ?? DEFAULT_DEX_ORDER.length) + 1}</span>
+                      </div>
+                      <small className="mh__dexname">???</small>
+                    </div>
+                  </div>
+                  <p className="mh__empty">레벨 5가 되면 랜덤으로 환생해요.<br />미스테리 펫을 모아보세요.</p>
+                </div>
+              </div>
+            )}
             {mode === 'med' && (
               <>
                 <div className="mh__card">
@@ -989,6 +1058,43 @@ export default function ChatApp() {
                   </div>
                 </div>
                 )}
+
+                {/* 📔 마음 일기장 — (1단계) 아카이브에서 마음관리 탭으로 이동. 배치 다듬기는 2단계 */}
+                <div className="mh__card">
+                  <div className="mh__card-head">
+                    📔 마음 일기장
+                    <span className="mh__pets-nav">
+                      <button onClick={() => setCalYM((v) => { const d = new Date(v.y, v.m - 1, 1); return { y: d.getFullYear(), m: d.getMonth() } })} aria-label="이전 달">◀</button>
+                      <button onClick={() => setCalYM((v) => { const d = new Date(v.y, v.m + 1, 1); return { y: d.getFullYear(), m: d.getMonth() } })} aria-label="다음 달">▶</button>
+                    </span>
+                  </div>
+                  <p className="mh__cal-title">{calYM.y}년 {calYM.m + 1}월</p>
+                  <div className="mh__cal">
+                    {['일', '월', '화', '수', '목', '금', '토'].map((w) => (
+                      <span key={w} className="mh__cal-wd">{w}</span>
+                    ))}
+                    {Array.from({ length: new Date(calYM.y, calYM.m, 1).getDay() }, (_, i) => (
+                      <span key={`b${i}`} className="mh__cal-cell mh__cal-cell--empty" />
+                    ))}
+                    {Array.from({ length: new Date(calYM.y, calYM.m + 1, 0).getDate() }, (_, i) => {
+                      const day = i + 1
+                      const key = `${calYM.y}-${String(calYM.m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                      const e = diary[key]
+                      const isToday = key === dayKeyOf(Date.now())
+                      return (
+                        <span
+                          key={key}
+                          className={`mh__cal-cell${isToday ? ' mh__cal-cell--today' : ''}${e?.mood ? ' mh__cal-cell--has' : ''}`}
+                          title={e?.mood ? `${e.mood} ${e.moodLabel ?? ''}`.trim() : undefined}
+                        >
+                          <em>{day}</em>
+                          {e?.mood && <span className="mh__cal-mood">{e.mood}</span>}
+                        </span>
+                      )
+                    })}
+                  </div>
+                  <p className="mh__empty mh__cal-hint">날짜마다 그날 고른 기분 이모지가 쌓여요 😊</p>
+                </div>
               </>
             )}
 
@@ -1096,87 +1202,16 @@ export default function ChatApp() {
                   </p>
                 </form>
               </>
-            ) : mode === 'archive' ? (
-              /* ── 📖 아카이브 — 펫 도감 + 마음 일기장 ── */
+            ) : mode === 'report' ? (
+              /* ── 📊 리포트 — 준비 중(플레이스홀더). 2차 배포 때 UI·데이터 연결 ── */
               <div className="mh__settings">
-                <div className="mh__card">
-                  <div className="mh__card-head">📖 펫 도감</div>
-                  <div className="mh__dexrow">
-                    {(pet?.speciesOrder && pet.speciesOrder.length > 0 ? pet.speciesOrder : DEFAULT_DEX_ORDER).map((creature, i) => {
-                      const order = i + 1 // 랜덤 첫 등장 캐릭터가 1번
-                      const anc = normalizeAncestors(pet?.ancestors)
-                      const isActive = pet?.creature === creature
-                      const ancMatch = anc.find((a) => a.creature === creature)
-                      const acquired = hasPoses(creature) && (isActive || !!ancMatch)
-                      const url = acquired
-                        ? poseUrl(creature, isActive ? pet?.stage ?? 1 : 5, 'idle')
-                        : undefined
-                      const nm = isActive ? petName : ancMatch?.name ?? BETA_NAMES[creature] ?? creature
-                      return (
-                        <div key={creature} className={`mh__dexslot${acquired ? ' mh__dexslot--got' : ''}`}>
-                          <div className="mh__dexart">
-                            {acquired && url ? (
-                              <img className={`mh__deximg${creatureScale(creature) !== 1 ? ' mh__deximg--sq' : ''}`} src={url} alt={nm} draggable={false} />
-                            ) : (
-                              <img className="mh__deximg mh__deximg--myst" src={dexImg('mystery')} alt="미공개" draggable={false} />
-                            )}
-                            <img className="mh__dexframe" src={dexImg('frame')} alt="" draggable={false} />
-                            <span className="mh__dexno">{order}</span>
-                          </div>
-                          <small className="mh__dexname">{acquired ? nm : '???'}</small>
-                        </div>
-                      )
-                    })}
-                    {/* 미공개 자리 — 추후 추가될 3번째 캐릭터(지금은 항상 미스터리 박스) */}
-                    <div key="future" className="mh__dexslot">
-                      <div className="mh__dexart">
-                        <img className="mh__deximg mh__deximg--myst" src={dexImg('mystery')} alt="미공개" draggable={false} />
-                        <img className="mh__dexframe" src={dexImg('frame')} alt="" draggable={false} />
-                        <span className="mh__dexno">{(pet?.speciesOrder?.length ?? DEFAULT_DEX_ORDER.length) + 1}</span>
-                      </div>
-                      <small className="mh__dexname">???</small>
-                    </div>
-                  </div>
-                  <p className="mh__empty">레벨 5가 되면 랜덤으로 환생해요.<br />미스테리 펫을 모아보세요.</p>
-                </div>
-
-                <div className="mh__card">
-                  <div className="mh__card-head">
-                    📔 마음 일기장
-                    <span className="mh__pets-nav">
-                      <button onClick={() => setCalYM((v) => { const d = new Date(v.y, v.m - 1, 1); return { y: d.getFullYear(), m: d.getMonth() } })} aria-label="이전 달">◀</button>
-                      <button onClick={() => setCalYM((v) => { const d = new Date(v.y, v.m + 1, 1); return { y: d.getFullYear(), m: d.getMonth() } })} aria-label="다음 달">▶</button>
-                    </span>
-                  </div>
-                  <p className="mh__cal-title">{calYM.y}년 {calYM.m + 1}월</p>
-                  <div className="mh__cal">
-                    {['일', '월', '화', '수', '목', '금', '토'].map((w) => (
-                      <span key={w} className="mh__cal-wd">{w}</span>
-                    ))}
-                    {Array.from({ length: new Date(calYM.y, calYM.m, 1).getDay() }, (_, i) => (
-                      <span key={`b${i}`} className="mh__cal-cell mh__cal-cell--empty" />
-                    ))}
-                    {Array.from({ length: new Date(calYM.y, calYM.m + 1, 0).getDate() }, (_, i) => {
-                      const day = i + 1
-                      const key = `${calYM.y}-${String(calYM.m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-                      const e = diary[key]
-                      const isToday = key === dayKeyOf(Date.now())
-                      return (
-                        <span
-                          key={key}
-                          className={`mh__cal-cell${isToday ? ' mh__cal-cell--today' : ''}${e?.mood ? ' mh__cal-cell--has' : ''}`}
-                          title={e?.mood ? `${e.mood} ${e.moodLabel ?? ''}`.trim() : undefined}
-                        >
-                          <em>{day}</em>
-                          {e?.mood && <span className="mh__cal-mood">{e.mood}</span>}
-                        </span>
-                      )
-                    })}
-                  </div>
-                  <p className="mh__empty mh__cal-hint">날짜마다 그날 고른 기분 이모지가 쌓여요 😊</p>
+                <div className="mh__card mh__soon">
+                  <div className="mh__soon-emoji" aria-hidden>📊</div>
+                  <div className="mh__soon-title">리포트는 준비 중이에요</div>
+                  <p className="mh__soon-sub">곧 나의 스트레스·돌봄 기록을 한눈에 볼 수 있어요.</p>
                 </div>
               </div>
-            ) : (
+            ) : mode === 'home' ? null : (
               /* ── ⚙️ 설정 탭 (별도 창 없음 — 미니홈에 통합) ── */
               <div className="mh__settings">
                 <div className="mh__card">
@@ -1463,26 +1498,7 @@ export default function ChatApp() {
             )}
           </div>
 
-          {/* 우측 책갈피 탭 */}
-          <nav className="mh__tabs">
-            <button className={`mh__tab mh__tab--heart${mode === 'heart' ? ' on' : ''}`} onClick={() => setMode('heart')}>
-              💛<span>마음관리</span>
-            </button>
-            <button
-              className={`mh__tab mh__tab--icon mh__tab--arc${mode === 'archive' ? ' on' : ''}`}
-              onClick={() => setMode('archive')}
-              title="아카이브"
-            >
-              📔
-            </button>
-            <button
-              className={`mh__tab mh__tab--icon mh__tab--set${mode === 'settings' ? ' on' : ''}`}
-              onClick={() => setMode('settings')}
-              title="설정"
-            >
-              ⚙️
-            </button>
-          </nav>
+          {/* (우측 세로 책갈피 → 상단 가로 탭으로 이동. 아래 mh__toptabs 참조) */}
         </div>
       </div>
     </div>
