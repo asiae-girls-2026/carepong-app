@@ -750,7 +750,8 @@ body {
 /* ══ [1단계] 상단 가로 탭 (마이룸·약지도·마음관리·리포트·설정) ══ */
 .mh__toptabs {
   flex: none; display: flex; gap: 4px;
-  margin: 0 6px 8px; padding: 0;
+  margin: 0 6px -10px; padding: 0 2px;  /* 아래로 -10px → 프레임 위에 살짝 걸침 */
+  position: relative; z-index: 2;        /* 탭이 프레임 위로 올라오게 */
 }
 .mh__toptab {
   flex: 1; min-width: 0;
@@ -851,14 +852,9 @@ body {
 /* 프레임 안 배경을 크림으로(기획서의 부드러운 톤). 미니룸 배경 이미지는 그대로 */
 .mh__frame { background: #fff; }
 /* [수정] 기획서처럼 "큰 흰 박스 안에 카드들" — 미니룸·펫상태·하트를 하나의 흰 박스(homebox)로 묶음 */
-.mh__homebox {
-  margin: 0 2px 6px; padding: 8px;
-  background: #fff;
-  border: 2px solid var(--frame-line);
-  border-radius: 12px;
-  box-shadow: 0 2px 0 rgba(93, 128, 172, 0.25);
-}
-/* 박스 안에서 미니룸·카드는 가장자리 여백 없이(박스 패딩이 담당) */
+/* 안쪽 파란 박스(이중 테두리) 제거 — 바깥 프레임이 이미 파란 테두리 담당. homebox는 묶음·간격만 */
+.mh__homebox { padding: 0; background: none; border: none; box-shadow: none; }
+/* 박스 안 미니룸·카드는 같은 좌우 기준으로 정렬(어긋남 방지) */
 .mh__homebox .mh__room { border-radius: 9px 9px 0 0; }
 .mh__homebox .mh__statcard,
 .mh__homebox .mh__heartcard { margin: 8px 0 0; }
@@ -874,6 +870,11 @@ body {
 /* 문제: home의 고정 블록(확대된 미니룸 등)이 프레임을 꽉 채워 아래 도감이 안 보이고 스크롤도 막힘.
    해결: home 탭에서는 프레임 전체를 세로 스크롤로 만들고, 내부 블록은 자연 높이로 쌓이게 한다. */
 .mh--home .mh__frame { overflow-y: auto; overflow-x: hidden; }
+/* 탭이 프레임 위에 -10px 겹치므로, 프레임 상단에 그만큼 여유를 줘 미니룸이 안 가리게 */
+.mh__frame { padding-top: 12px; }
 .mh--home .mh__body { flex: none; display: block; }          /* body가 남은 공간만 먹던 것 해제 */
-.mh--home .mh__content { flex: none; }
-.mh--home .mh__settings { flex: none; min-height: 0; overflow: visible; } /* 자체 스크롤 끄고 프레임이 담당 */
+/* home 탭: content의 테두리·배경 제거(도감이 다른 폭으로 어긋나던 것 해결) → homebox 카드들과 좌우 정렬 통일 */
+.mh--home .mh__content { flex: none; background: none; border: none; border-radius: 0; }
+.mh--home .mh__settings { flex: none; min-height: 0; overflow: visible; padding: 0; } /* 자체 스크롤 끄고 프레임이 담당 */
+/* 도감 카드도 미니룸·상태·하트와 같은 좌우 기준(margin 0)으로 */
+.mh--home .mh__settings > .mh__card { margin-left: 0; margin-right: 0; }
