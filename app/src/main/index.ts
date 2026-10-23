@@ -177,9 +177,10 @@ function createWindow(): void {
   })
 
   // (전체 영역 bounds 적용은 whenReady의 applyOverlayBounds에서 1회 수행 — 깜빡임 루프 방지 로직과 함께)
-  // 'screen-saver' 레벨은 Windows 작업표시줄보다 위라 작업표시줄을 가린다 → 'floating'으로 낮춤
-  // (펫은 일반 창들 위에 그대로 떠 있고, 작업표시줄은 정상 노출·클릭 가능)
-  win.setAlwaysOnTop(true, 'floating')
+  // 최상단 레벨: 'floating'은 레벨이 낮아 다른 창을 클릭하면 펫이 그 뒤로 가려졌다.
+  // 'screen-saver'는 작업표시줄까지 가린다 → 그 사이인 'pop-up-menu'로 올려, 일반 창들 위에 안정적으로
+  // 떠 있으면서 작업표시줄은 정상 노출된다. (주기적 재설정 없이 1회 설정으로 OS가 유지 → 깜빡임 없음)
+  win.setAlwaysOnTop(true, 'pop-up-menu')
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   // 기본은 클릭 통과: 펫 위에 있을 때만 렌더러가 false로 토글한다.
   win.setIgnoreMouseEvents(true, { forward: true })
@@ -190,20 +191,14 @@ function createWindow(): void {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  // 최상단 유지 — alwaysOnTop(true,'floating')은 창 생성 시 1회 설정으로 OS가 계속 유지한다.
-  // 단, 다른 창을 클릭해 그 창이 활성화되면(focusable:false여도) 펫이 그 뒤로 가려질 수 있다.
-  // 2초마다 무조건 재확정하면 깜빡임이 생기므로, "다른 창에 가려지는 순간(blur)"에만 한 번 다시 올린다.
-  // blur는 포커스를 뺏길 때만 발생 → 평소엔 호출 0회라 깜빡임이 없고, 가려졌을 때만 조용히 복구된다.
-  win.on('blur', () => {
-    if (!win || win.isDestroyed()) return
-    win.setAlwaysOnTop(true, 'floating')
-  })
+  // (최상단 유지는 위 setAlwaysOnTop(true,'pop-up-menu') 1회 설정으로 충분. 주기적 재확정·blur 복구는
+  //  focusable:false 창에선 blur가 오지 않아 효과가 없고 깜빡임만 유발하므로 두지 않는다.)
 }
 
 // 스트레스 알림·완화 팝업처럼 "반드시 눌러야 하는" UI가 뜰 때, 펫 창을 확실히 최상단으로 끌어올린다.
 export function raisePetTop(): void {
   if (!win || win.isDestroyed()) return
-  win.setAlwaysOnTop(true, 'floating')
+  win.setAlwaysOnTop(true, 'pop-up-menu')
   win.moveTop() // 같은 레벨 안에서도 맨 위로 (가려진 상태 즉시 해소)
 }
 
