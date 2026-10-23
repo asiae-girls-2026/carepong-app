@@ -823,8 +823,16 @@ body {
   background: var(--cream); border: 2px solid #e4d9c3; border-radius: 12px;
 }
 /* 카드 안으로 들어온 하트 줄 — 기존 배경/테두리 제거(카드가 감쌈) */
+/* 카드 안 하트 — 좁은 폭에서 깨지지 않게 줄바꿈 허용(라벨줄 / 하트줄+누적) */
+.mh__heartcard .mh__hearts-label { font-size: 11px; color: #6b5c3e; }
+.mh__heartcard .mh__hearts-row { order: 3; flex-basis: auto; }   /* 하트 10칸을 아랫줄로 */
+.mh__heartcard .mh__hearts-note { order: 2; }
+.mh__heartcard .mh__hearts-acc { order: 4; }                     /* 누적은 하트 줄 오른쪽 끝 */
+.mh__heartcard .mh__hearts-row i { font-size: 13px; }
+/* 카드가 감싸므로 하트 줄 자체의 배경/테두리는 제거 */
 .mh__heartcard .mh__hearts {
   background: none; border: none; padding: 0 0 2px; margin: 0;
+  flex-wrap: wrap; row-gap: 4px;
 }
 .mh__heartcard .mh__hearts::after { left: 0; }
 /* 다음 꾸미기까지 진척바 */
@@ -849,3 +857,11 @@ body {
 }
 /* 미니룸 아래 테두리와 카드들 사이 간격 살짝 */
 .mh__room { border-color: #cdbf9f; }
+
+/* ══ [수정] 마이룸(home) 탭 스크롤 — 미니룸+상태+하트+도감을 한 스크롤로 ══ */
+/* 문제: home의 고정 블록(확대된 미니룸 등)이 프레임을 꽉 채워 아래 도감이 안 보이고 스크롤도 막힘.
+   해결: home 탭에서는 프레임 전체를 세로 스크롤로 만들고, 내부 블록은 자연 높이로 쌓이게 한다. */
+.mh--home .mh__frame { overflow-y: auto; overflow-x: hidden; }
+.mh--home .mh__body { flex: none; display: block; }          /* body가 남은 공간만 먹던 것 해제 */
+.mh--home .mh__content { flex: none; }
+.mh--home .mh__settings { flex: none; min-height: 0; overflow: visible; } /* 자체 스크롤 끄고 프레임이 담당 */
