@@ -929,25 +929,41 @@ export default function ChatApp() {
           </div>
         )}
 
-        {/* 오늘의 하트 — 대화할수록 한 칸씩! 10칸이면 보너스 */}
+        {/* 오늘의 하트 · 방 꾸미기 — 카드(기획서): 제목 + 하트 10칸 + 누적 + 진척바 */}
         {pet && (
-          <div
-            className="mh__hearts"
-            data-tip={heartsToday >= 10 ? '오늘 하트 만땅! 보너스 받았어요' : `오늘 나눈 대화 ${heartsToday}/10\n다 채우면 보너스 XP!`}
-          >
-            <span className="mh__hearts-label">오늘의 하트</span>
-            <span className="mh__hearts-row">
-              {Array.from({ length: 10 }, (_, i) => (
-                <i key={i} className={i < heartsToday ? 'on' : ''}>
-                  {i < heartsToday ? '💛' : '🤍'}
-                </i>
-              ))}
-            </span>
-            {/* 누적 하트 — 이 캐릭터 방꾸미기 진척(환생 시 0부터). 다음 방까지 몇 개 남았는지 표시 */}
-            <span className="mh__hearts-acc">
-              💜 누적 {lifetimeChats}
-              {nextRoom ? ` · 다음 방까지 ${Math.max(0, nextRoom.hearts - lifetimeChats)}` : ' · 방 완성 🎉'}
-            </span>
+          <div className="mh__heartcard">
+            <div
+              className="mh__hearts"
+              data-tip={heartsToday >= 10 ? '오늘 하트 만땅! 보너스 받았어요' : `오늘 나눈 대화 ${heartsToday}/10\n다 채우면 보너스 XP!`}
+            >
+              <span className="mh__hearts-label">오늘의 하트 · 방 꾸미기</span>
+              <span className="mh__hearts-row">
+                {Array.from({ length: 10 }, (_, i) => (
+                  <i key={i} className={i < heartsToday ? 'on' : ''}>
+                    {i < heartsToday ? '💛' : '🤍'}
+                  </i>
+                ))}
+              </span>
+              {/* 누적 하트 — 이 캐릭터 방꾸미기 진척(환생 시 0부터) */}
+              <span className="mh__hearts-acc">💜 누적 {lifetimeChats}</span>
+            </div>
+            {/* 다음 꾸미기까지 진척바 (현재/목표) */}
+            {nextRoom ? (
+              <div className="mh__roomprog">
+                <div className="mh__roomprog-top">
+                  다음 꾸미기까지 💜 <b>{Math.max(0, nextRoom.hearts - lifetimeChats)}</b>개 남았어요
+                  <span className="mh__roomprog-frac">({lifetimeChats}/{nextRoom.hearts})</span>
+                </div>
+                <div className="mh__roomprog-track">
+                  <span style={{ width: `${Math.min(100, Math.round((lifetimeChats / nextRoom.hearts) * 100))}%` }} />
+                </div>
+              </div>
+            ) : (
+              <div className="mh__roomprog">
+                <div className="mh__roomprog-top">방 꾸미기 풀세트 완성! 🎉</div>
+                <div className="mh__roomprog-track"><span style={{ width: '100%' }} /></div>
+              </div>
+            )}
           </div>
         )}
         </>)}
