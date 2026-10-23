@@ -762,9 +762,10 @@ body {
 .mh__toptab:hover { background: #fbf6e9; }
 .mh__toptab-ico { font-size: 16px; line-height: 1; }
 .mh__toptab-txt { font-size: 10.5px; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; }
+/* 선택 탭 — 기획서 톤(파란색) */
 .mh__toptab.on {
-  background: var(--orange); border-color: #e07d1f; color: #fff;
-  box-shadow: 0 2px 0 #c96c13;
+  background: #5a8fd6; border-color: #4578bd; color: #fff;
+  box-shadow: 0 2px 0 #3f6aa8;
 }
 
 /* [1단계] 준비 중 플레이스홀더 (리포트 등) */
@@ -775,3 +776,41 @@ body {
 .mh__soon-emoji { font-size: 40px; }
 .mh__soon-title { font-size: 14px; font-weight: 900; color: #6b5c3e; }
 .mh__soon-sub { margin: 2px 0 0; font-size: 11.5px; color: var(--ink-soft); line-height: 1.5; }
+
+/* ══ [2단계] 펫 정보바 (캐릭터 + 이름·레벨·세대 + TODAY) ══ */
+.mh__petbar {
+  flex: none; display: flex; align-items: center; gap: 7px;
+  margin: 2px 6px 8px; padding: 7px 11px;
+  background: #fff; border: 2px solid #ecdfc6; border-radius: 12px;
+}
+.mh__petbar-face {
+  flex: none; width: 26px; height: 26px; border-radius: 8px;
+  display: grid; place-items: center; font-size: 15px;
+  background: var(--butter);
+}
+.mh__petbar-name { font-size: 13.5px; font-weight: 900; color: var(--ink); }
+.mh__petbar-meta { font-size: 11px; font-weight: 700; color: var(--ink-soft); }
+.mh__petbar-today {
+  margin-left: auto; flex: none;
+  font-size: 10.5px; font-weight: 800; color: #fff;
+  background: var(--orange); padding: 3px 10px; border-radius: 999px;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.12);
+}
+
+/* ══ [2단계] 펫 상태 카드 — 제목 + 세로 4줄 게이지(이름·긴바·숫자) ══ */
+.mh__statcard {
+  flex: none; margin: 0 6px 8px; padding: 10px 12px;
+  background: var(--cream); border: 2px solid #e4d9c3; border-radius: 12px;
+}
+.mh__statcard-head { font-size: 12px; font-weight: 900; color: #6b5c3e; margin-bottom: 8px; }
+.mh__stats--col { display: flex; flex-direction: column; gap: 9px; background: none; border: none; padding: 0; }
+/* 세로 행 게이지: 아이콘 · 이름 · 긴 바 · 숫자 */
+.mh__minibar--row { display: flex; align-items: center; gap: 8px; width: 100%; }
+.mh__minibar--row > i { font-size: 13px; flex: none; }
+.mh__minibar-name { flex: none; width: 30px; font-style: normal; font-size: 11.5px; font-weight: 800; color: #6b5c3e; }
+.mh__minibar--row > b { flex: 1; height: 11px; border-radius: 6px; background: #ece2cf; overflow: hidden; }
+.mh__minibar--row > b u { display: block; height: 100%; border-radius: 6px; transition: width 0.6s ease; }
+.mh__minibar-val { flex: none; width: 26px; text-align: right; font-size: 12px; font-weight: 800; color: #6b5c3e; font-variant-numeric: tabular-nums; }
+/* 세로 행에선 기존 가로 툴팁 위치 보정 해제(행 전체에 떠서 충분) */
+.mh__minibar--row::after { left: 0; transform: translateX(0) translateY(3px); }
+.mh__minibar--row:hover::after { transform: translateX(0) translateY(0); }

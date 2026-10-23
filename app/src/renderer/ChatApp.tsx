@@ -260,14 +260,17 @@ function DrugCard({ card }: { card: DrugInfo }) {
   )
 }
 
-function MiniBar({ icon, value, color, title }: { icon: string; value: number; color: string; title: string }) {
+// label 있으면: 아이콘 + 이름 + 긴 바 + 숫자(세로 행 스타일, 기획서). 없으면 기존(아이콘+바)
+function MiniBar({ icon, value, color, title, label }: { icon: string; value: number; color: string; title: string; label?: string }) {
   const pct = Math.max(0, Math.min(100, Math.round(value)))
   return (
-    <span className="mh__minibar" data-tip={title}>
+    <span className={`mh__minibar${label ? ' mh__minibar--row' : ''}`} data-tip={title}>
       <i>{icon}</i>
+      {label && <em className="mh__minibar-name">{label}</em>}
       <b>
         <u style={{ width: `${pct}%`, background: color }} />
       </b>
+      {label && <span className="mh__minibar-val">{pct}</span>}
     </span>
   )
 }
@@ -782,6 +785,14 @@ export default function ChatApp() {
         </button>
       </header>
 
+      {/* ── 펫 정보바 (기획서): 캐릭터 + 이름·레벨·세대 + TODAY 배지 ── */}
+      <div className="mh__petbar">
+        <span className="mh__petbar-face" aria-hidden>{creatureScale(pet?.creature ?? 'cat') !== 1 ? '🐲' : '🐱'}</span>
+        <span className="mh__petbar-name">{petName}</span>
+        <span className="mh__petbar-meta">Lv.{pet?.stage ?? 1} · {pet?.generation ?? 1}번째 친구</span>
+        <span className="mh__petbar-today">TODAY 😊</span>
+      </div>
+
       {update && !update.isLatest && (
         <div className="mh__updatebar">
           <span>🔔 새 버전 <b>v{update.latest}</b>이 나왔어요. 정확한 기록을 위해 업데이트가 필요해요.</span>
@@ -900,18 +911,21 @@ export default function ChatApp() {
           {nextRoom ? ` · 다음 ${nextRoom.item}까지 ${nextRoom.hearts - lifetimeChats}하트` : ' · 완성 🎉'}
         </div>
 
-        {/* 상태 바 — 행복·건강·기력·XP 상시 표시 */}
+        {/* 펫 상태 — 행복·건강·기력·XP (기획서: 제목 카드 + 세로 4줄, 이름·숫자 포함) */}
         {pet && (
-          <div className="mh__stats">
-            <MiniBar icon="🩷" value={pet.stats.happiness} color="#ff6b8a" title={`행복 ${Math.round(pet.stats.happiness)}\n쓰다듬기 +12 · 명상 +12 · 심호흡 +10 · 산책 +8 · 밥 +5 · 스트레칭 +3`} />
-            <MiniBar icon="💪" value={pet.stats.health} color="#5ec27a" title={`건강 ${Math.round(pet.stats.health)}\n산책 +10 · 밥 +8 · 물 +5 · 스트레칭 +5 · 쓰다듬기 +3`} />
-            <MiniBar icon="⚡" value={pet.stats.energy} color="#f2b441" title={`기력 ${Math.round(pet.stats.energy)}\n밥 +12 · 명상 +10 · 약 +10 · 휴식 +8 · 심호흡 +8 (산책은 −12 소모)`} />
-            <MiniBar
-              icon="⭐"
-              value={xpProgress(pet).pct}
-              color="#b9aee8"
-              title={isMaxed(pet) ? '환생 준비 완료! 이제 다음 친구를 만날 수 있어요' : `XP ${xpProgress(pet).into}/${xpProgress(pet).needed}\n${pet.stage >= 5 ? '환생까지 쑥쑥!' : '돌보고 수다 떨면 쑥쑥!'}`}
-            />
+          <div className="mh__statcard">
+            <div className="mh__statcard-head">펫 상태</div>
+            <div className="mh__stats mh__stats--col">
+              <MiniBar icon="🩷" label="행복" value={pet.stats.happiness} color="#ff6b8a" title={`행복 ${Math.round(pet.stats.happiness)}\n쓰다듬기 +12 · 명상 +12 · 심호흡 +10 · 산책 +8 · 밥 +5 · 스트레칭 +3`} />
+              <MiniBar icon="💪" label="건강" value={pet.stats.health} color="#5ec27a" title={`건강 ${Math.round(pet.stats.health)}\n산책 +10 · 밥 +8 · 물 +5 · 스트레칭 +5 · 쓰다듬기 +3`} />
+              <MiniBar icon="⚡" label="기력" value={pet.stats.energy} color="#f2b441" title={`기력 ${Math.round(pet.stats.energy)}\n밥 +12 · 명상 +10 · 약 +10 · 휴식 +8 · 심호흡 +8 (산책은 −12 소모)`} />
+              <MiniBar
+                icon="⭐" label="XP"
+                value={xpProgress(pet).pct}
+                color="#b9aee8"
+                title={isMaxed(pet) ? '환생 준비 완료! 이제 다음 친구를 만날 수 있어요' : `XP ${xpProgress(pet).into}/${xpProgress(pet).needed}\n${pet.stage >= 5 ? '환생까지 쑥쑥!' : '돌보고 수다 떨면 쑥쑥!'}`}
+              />
+            </div>
           </div>
         )}
 
