@@ -124,16 +124,16 @@ body {
 .mh__plant { position: absolute; bottom: 26px; right: 108px; font-size: 24px; }
 
 /* 펫 자리 (러그 + 그림자) */
-.mh__petspot { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); }
+.mh__petspot { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); }
 /* (러그 제거: 인테리어는 배경 이미지에 포함 — 60하트 러그 배경으로 처리) */
 .mh__pet {
-  position: relative; width: 150px; height: 150px; object-fit: contain; /* [3단계] 미니룸 확대에 맞춰 펫도 확대(118→150) */
+  position: relative; width: 132px; height: 132px; object-fit: contain; /* [디테일] 방(190) 중앙에 맞춰 조정(150→132) */
   image-rendering: pixelated;
   animation: hostBob 2.4s ease-in-out infinite;
 }
 .mh__pet-fallback { position: relative; font-size: 42px; }
 /* 정사각형 원본(드래곤 등) — 고양이와 체감 크기 맞춤(바닥 기준은 petspot가 잡아줌) */
-.mh__pet--sq { width: 98px; height: 98px; }
+.mh__pet--sq { width: 86px; height: 86px; }
 @keyframes hostBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 
 /* 문패 */
@@ -541,7 +541,9 @@ body {
 .mh__hearts-label { font-size: 10px; font-weight: 800; color: #8a6f3e; flex: none; }
 .mh__hearts-row { display: flex; gap: 2px; }
 /* 누적 하트(방꾸미기 진척) — 오른쪽 정렬 */
-.mh__hearts-acc { margin-left: auto; flex: none; font-size: 10px; font-weight: 700; color: #9a6cc4; white-space: nowrap; }
+.mh__hearts-acc { margin-left: auto; flex: none; font-size: 10px; font-weight: 800; color: #e08a2e; white-space: nowrap; }
+/* "하트는 방 꾸미기 전용" 안내 (기획서) */
+.mh__hearts-note { flex: none; font-size: 9.5px; font-weight: 700; color: var(--ink-soft); margin-left: 4px; }
 .mh__hearts-row i { font-style: normal; font-size: 11px; filter: grayscale(0.15); transition: transform 0.15s ease; }
 .mh__hearts-row i.on { animation: heartPop 0.35s ease; }
 @keyframes heartPop { 0% { transform: scale(0.4); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }
@@ -828,12 +830,12 @@ body {
 /* 다음 꾸미기까지 진척바 */
 .mh__roomprog { margin-top: 8px; }
 .mh__roomprog-top { font-size: 11px; font-weight: 700; color: #7a6a4a; margin-bottom: 5px; }
-.mh__roomprog-top b { color: #9a6cc4; font-weight: 800; }
+.mh__roomprog-top b { color: #e08a2e; font-weight: 800; }
 .mh__roomprog-frac { color: var(--ink-soft); font-weight: 600; margin-left: 4px; }
 .mh__roomprog-track { height: 9px; border-radius: 5px; background: #ece2cf; overflow: hidden; }
 .mh__roomprog-track span {
   display: block; height: 100%; border-radius: 5px;
-  background: linear-gradient(90deg, #d7c3f0, #b9aee8);
+  background: linear-gradient(90deg, #ffd98e, #ffb04f);
   transition: width 0.6s ease;
 }
 

@@ -936,22 +936,23 @@ export default function ChatApp() {
               className="mh__hearts"
               data-tip={heartsToday >= 10 ? '오늘 하트 만땅! 보너스 받았어요' : `오늘 나눈 대화 ${heartsToday}/10\n다 채우면 보너스 XP!`}
             >
-              <span className="mh__hearts-label">오늘의 하트 · 방 꾸미기</span>
+              <span className="mh__hearts-label">오늘의 하트</span>
+              <span className="mh__hearts-note">하트는 방 꾸미기 전용</span>
               <span className="mh__hearts-row">
                 {Array.from({ length: 10 }, (_, i) => (
                   <i key={i} className={i < heartsToday ? 'on' : ''}>
-                    {i < heartsToday ? '💛' : '🤍'}
+                    {i < heartsToday ? '🧡' : '🤍'}
                   </i>
                 ))}
               </span>
               {/* 누적 하트 — 이 캐릭터 방꾸미기 진척(환생 시 0부터) */}
-              <span className="mh__hearts-acc">💜 누적 {lifetimeChats}</span>
+              <span className="mh__hearts-acc">🧡 누적 {lifetimeChats}</span>
             </div>
             {/* 다음 꾸미기까지 진척바 (현재/목표) */}
             {nextRoom ? (
               <div className="mh__roomprog">
                 <div className="mh__roomprog-top">
-                  다음 꾸미기까지 💜 <b>{Math.max(0, nextRoom.hearts - lifetimeChats)}</b>개 남았어요
+                  다음 꾸미기까지 🧡 <b>{Math.max(0, nextRoom.hearts - lifetimeChats)}</b>개 남았어요
                   <span className="mh__roomprog-frac">({lifetimeChats}/{nextRoom.hearts})</span>
                 </div>
                 <div className="mh__roomprog-track">
