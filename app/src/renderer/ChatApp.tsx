@@ -905,10 +905,6 @@ export default function ChatApp() {
             {petName} <small>Lv.{pet?.stage ?? 1} · {pet?.generation ?? 1}번째 아이</small>
           </div>
         </div>
-        <div className="mh__room-stage">
-          🏠 방꾸미기 {roomStage}/9
-          {nextRoom ? ` · 다음 ${nextRoom.item}까지 ${nextRoom.hearts - lifetimeChats}하트` : ' · 완성 🎉'}
-        </div>
 
         {/* 펫 상태 — 행복·건강·기력·XP (기획서: 제목 카드 + 세로 4줄, 이름·숫자 포함) */}
         {pet && (
@@ -951,7 +947,7 @@ export default function ChatApp() {
             {nextRoom ? (
               <div className="mh__roomprog">
                 <div className="mh__roomprog-top">
-                  다음 꾸미기까지 🧡 <b>{Math.max(0, nextRoom.hearts - lifetimeChats)}</b>개 남았어요
+                  다음 {nextRoom.item}까지 🧡 <b>{Math.max(0, nextRoom.hearts - lifetimeChats)}</b>개 남았어요
                   <span className="mh__roomprog-frac">({lifetimeChats}/{nextRoom.hearts})</span>
                 </div>
                 <div className="mh__roomprog-track">
