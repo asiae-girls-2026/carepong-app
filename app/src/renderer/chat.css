@@ -849,7 +849,19 @@ body {
 
 /* ══ [3단계] 전체 톤 통일 — 크림 배경 · 둥근 카드 느낌 ══ */
 /* 프레임 안 배경을 크림으로(기획서의 부드러운 톤). 미니룸 배경 이미지는 그대로 */
-.mh__frame { background: #fffdf6; }
+.mh__frame { background: #fff; }
+/* [수정] 기획서처럼 "큰 흰 박스 안에 카드들" — 미니룸·펫상태·하트를 하나의 흰 박스(homebox)로 묶음 */
+.mh__homebox {
+  margin: 0 2px 6px; padding: 8px;
+  background: #fff;
+  border: 2px solid var(--frame-line);
+  border-radius: 12px;
+  box-shadow: 0 2px 0 rgba(93, 128, 172, 0.25);
+}
+/* 박스 안에서 미니룸·카드는 가장자리 여백 없이(박스 패딩이 담당) */
+.mh__homebox .mh__room { border-radius: 9px 9px 0 0; }
+.mh__homebox .mh__statcard,
+.mh__homebox .mh__heartcard { margin: 8px 0 0; }
 /* 본문 content도 크림 톤 유지(이미 var(--cream))·room-stage(방꾸미기 N/9) 바 톤 정리 */
 .mh__room-stage {
   background: #f5efe2; border-color: #e4d9c3; color: #7a6a4a; font-weight: 700;

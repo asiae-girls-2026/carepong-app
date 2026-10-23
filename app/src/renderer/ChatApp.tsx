@@ -785,9 +785,8 @@ export default function ChatApp() {
         </button>
       </header>
 
-      {/* ── 펫 정보바 (기획서): 캐릭터 + 이름·레벨·세대 + TODAY 배지 ── */}
+      {/* ── 펫 정보바: 이름·레벨·세대 + TODAY 배지 (작은 얼굴 아이콘 제거) ── */}
       <div className="mh__petbar">
-        <span className="mh__petbar-face" aria-hidden>{creatureScale(pet?.creature ?? 'cat') !== 1 ? '🐲' : '🐱'}</span>
         <span className="mh__petbar-name">{petName}</span>
         <span className="mh__petbar-meta">Lv.{pet?.stage ?? 1} · {pet?.generation ?? 1}번째 친구</span>
         <span className="mh__petbar-today">TODAY 😊</span>
@@ -888,8 +887,8 @@ export default function ChatApp() {
             </p>
           </div>
         )}
-        {/* ── 마이룸(home) 탭에서만: 미니룸 + 펫상태 + 오늘의 하트 ── */}
-        {mode === 'home' && (<>
+        {/* ── 마이룸(home) 탭에서만: 미니룸 + 펫상태 + 오늘의 하트 (하나의 큰 흰 박스로 묶음) ── */}
+        {mode === 'home' && (<div className="mh__homebox">
         {/* 미니룸 — 가구: 창문·액자·시계·책장·침대·화분·스탠드 */}
         <div className="mh__room">
           {/* 방꾸미기 — 누적 하트 단계별 전체 방 배경 이미지 (0=빈방) */}
@@ -967,7 +966,7 @@ export default function ChatApp() {
             )}
           </div>
         )}
-        </>)}
+        </div>)}
 
         <div className="mh__body">
           <div className="mh__content">
