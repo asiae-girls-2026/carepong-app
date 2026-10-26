@@ -83,7 +83,7 @@ function createTray(): void {
   tray.setToolTip('케어퐁 — 스트레스 케어 데스크탑 펫')
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: '미니홈 🏠', click: () => openChatWindow('heart') },
+      { label: '미니홈 🏠', click: () => openChatWindow('home') },
       { label: '설정 ⚙️', click: () => openChatWindow('settings') },
       { label: '방해금지 전환 🔕', click: () => win?.webContents.send('pet:menuCommand', 'dnd') },
       { label: '펫 표시/숨김', click: () => win?.webContents.send('pet:menuCommand', 'hide') },
@@ -97,7 +97,7 @@ function createTray(): void {
 function notifyChatVisible(visible: boolean): void {
   if (win && !win.isDestroyed()) win.webContents.send('chat:visible', visible)
 }
-function openChatWindow(mode: 'med' | 'heart' | 'settings' = 'heart'): void {
+function openChatWindow(mode: 'home' | 'med' | 'heart' | 'settings' = 'home'): void {
   if (chat && !chat.isDestroyed()) {
     if (chat.isMinimized()) chat.restore() // 1#12①: 최소화 후 재클릭 복구
     chat.show()
@@ -383,14 +383,14 @@ ipcMain.on('pet:showContextMenu', (_e, state: { dnd: boolean; canRebirth?: boole
     ...(state?.canRebirth
       ? [{ label: '다음 친구 만나기 🥚', click: () => send('nextchar') }, { type: 'separator' as const }]
       : []),
-    { label: '미니홈 🏠', click: () => openChatWindow('heart') },
+    { label: '미니홈 🏠', click: () => openChatWindow('home') },
     { type: 'separator' as const },
     { label: state?.dnd ? '방해금지 끄기 🔔' : '방해금지 켜기 🔕', click: () => send('dnd') },
     { label: '종료', click: () => app.quit() },
   ]).popup({ window: win })
 })
 
-ipcMain.on('care:openChat', (_e, mode: 'med' | 'heart' | 'settings') => openChatWindow(mode))
+ipcMain.on('care:openChat', (_e, mode: 'home' | 'med' | 'heart' | 'settings') => openChatWindow(mode))
 // 챗 창에서 '1분 쉬어가기' → 오버레이의 완화 흐름 실행
 ipcMain.on('care:relief', () => win?.webContents.send('pet:menuCommand', 'relief'))
 
