@@ -880,3 +880,33 @@ body {
 .mh--home .mh__settings { flex: none; min-height: 0; overflow: visible; padding: 0; } /* 자체 스크롤 끄고 프레임이 담당 */
 /* 도감 카드도 미니룸·상태·하트와 같은 좌우 기준(margin 0)으로 */
 .mh--home .mh__settings > .mh__card { margin-left: 0; margin-right: 0; }
+
+/* ── 약지도(med) 리디자인 — 기획서·명세서 CP-MED-01 ───────────────── */
+/* 상단 요약 바(2.1): 오늘 복약 n/n · 클릭 시 리포트 탭 이동 */
+.mh__medbar {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; margin: 2px 0 8px; padding: 9px 12px;
+  background: #fff7e6; border: 1.5px solid #f0d9a6; border-radius: 10px;
+  font-size: 11.5px; color: #7a6a44; text-align: left; cursor: pointer;
+  transition: background .12s;
+}
+.mh__medbar:hover { background: #fff1d4; }
+.mh__medbar-main { flex: 1; min-width: 0; }
+.mh__medbar-main b { color: #d98a1f; font-weight: 900; }
+.mh__medbar-sub { color: #a8936a; }
+.mh__medbar-go {
+  flex: none; font-weight: 800; color: #d98a1f; white-space: nowrap;
+}
+
+/* 퀵리플라이 칩(2.4): 누르면 즉시 전송(2.3) */
+.mh__quickchips {
+  display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px;
+}
+.mh__quickchip {
+  flex: none; padding: 6px 11px;
+  font-size: 11px; font-weight: 700; color: #4a7a63;
+  background: #fff; border: 1.5px solid #bfe4d2; border-radius: 999px;
+  cursor: pointer; transition: background .12s, border-color .12s;
+}
+.mh__quickchip:hover { background: #eafaf1; border-color: #8fc9ab; }
+.mh__quickchip:active { background: #d8f0e2; }

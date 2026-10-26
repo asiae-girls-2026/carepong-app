@@ -81,9 +81,11 @@ const appendRegLog = (entry: RegLog): RegLog[] => {
 }
 
 const WELCOME: Record<'med' | 'heart', string> = {
-  med: '약에 대한 궁금한 건 모두 물어보세요! 💊',
+  med: '약 이름만 쳐주세요! 일부만 알아도 돼요 💊 등록할지, 궁금한 건 제가 여쭤볼게요.',
   heart: '집사님, 오늘은 어떤 힘든 일이 있으셨나요? 저랑 같이 이야기해봐요! 💛',
 }
+// 약지도 퀵리플라이 칩(명세서 2.4) — 누르면 그 문장이 즉시 전송된다(2.3).
+const MED_QUICK_CHIPS = ['유산균 아침 등록', '타이레놀 하루 몇 번?', '오늘 약 보여줘']
 const MED_ENTRY_ACTIONS: { label: string; action: QuickAction }[] = [
   { label: '💊 약 등록', action: 'reg' },
   { label: '🔍 약 물어보기', action: 'ask' },
@@ -282,7 +284,7 @@ export default function ChatApp() {
   const [feeds, setFeeds] = useState<Record<'med' | 'heart', ChatMessage[]>>(() => {
     const restored = loadHeartChat(Date.now())
     return {
-      med: [{ id: 1, role: 'pet', text: WELCOME.med, actions: MED_ENTRY_ACTIONS }],
+      med: [{ id: 1, role: 'pet', text: WELCOME.med }],
       heart: [{ id: 2, role: 'pet', text: WELCOME.heart }, ...restored],
     }
   })
@@ -645,6 +647,11 @@ export default function ChatApp() {
     const text = input.trim()
     if (!text) return
     setInput('')
+    sendText(text)
+  }
+  // 입력창·퀵리플라이 칩 공용 전송 — 칩은 해당 문장을 즉시 전송(명세서 2.3). 기존 send 로직 그대로.
+  const sendText = (text: string): void => {
+    if (!text) return
     // ② 서버에 보낼 직전 대화 이력(history) — 이번 user 말을 피드에 넣기 "전"의 heart 피드로 만든다(이번 message 제외).
     //   오래된 순, 최대 10개(5턴). 환영 메시지·위기 문구·기분체크 문답은 뺀다. 마음관리(heart) 탭에서만.
     const history = mode === 'heart' ? buildHistory(feeds.heart) : []
@@ -1013,44 +1020,19 @@ export default function ChatApp() {
               </div>
             )}
             {mode === 'med' && (
-              <>
-                <div className="mh__card">
-                  <div className="mh__card-head">
-                    오늘의 복약
-                    {config.medications.length > 0 && (
-                      <span className="mh__card-sub">
-                        {config.medications.filter((m) => takenToday(m.id)).length}/{config.medications.length} 완료
-                      </span>
-                    )}
-                  </div>
-                  {config.medications.length === 0 ? (
-                    <p className="mh__empty">등록된 약이 없어요 — 아래 대화에서 [💊 약 등록]을 눌러보세요!</p>
-                  ) : (
-                    <ul className="mh__meds">
-                      {config.medications.map((m) => (
-                        <li key={m.id} className={takenToday(m.id) ? 'done' : ''}>
-                          <span className="mh__med-name">
-                            💊 {m.name} <small>{m.times.map(fmtTime).join(', ')}</small>
-                          </span>
-                          {takenToday(m.id) ? (
-                            <span className="mh__med-done">✅</span>
-                          ) : (
-                            <button className="mh__med-btn" onClick={() => checkMed(m.id, m.name)}>
-                              먹었어요
-                            </button>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <div className="mh__med-extra">
-                    <span>오늘 물 💧 {waterToday}/{config.water.dailyTargetCups}컵</span>
-                    {(intake.medMissed ?? 0) > 0 && (
-                      <span className="mh__med-missed">놓친 복약 {intake.medMissed}회 <small>(벌점 없음)</small></span>
-                    )}
-                  </div>
-                </div>
-              </>
+              /* 약지도 상단 요약 바(기획서·명세서 2.1) — 오늘 복약 n/n, 클릭 시 리포트 탭 이동 */
+              <button
+                type="button"
+                className="mh__medbar"
+                onClick={() => setMode('report')}
+                aria-label="오늘 복약 요약 — 리포트 보러가기"
+              >
+                <span className="mh__medbar-main">
+                  💊 오늘 복약 <b>{config.medications.filter((m) => takenToday(m.id)).length}/{config.medications.length}</b> 완료
+                  <span className="mh__medbar-sub"> · 도장판·순응률은 리포트에서</span>
+                </span>
+                <span className="mh__medbar-go">보러가기 →</span>
+              </button>
             )}
 
             {mode === 'heart' && (
@@ -1126,6 +1108,16 @@ export default function ChatApp() {
 
             {mode === 'med' || mode === 'heart' ? (
               <>
+                {mode === 'med' && (
+                  /* 퀵리플라이 칩(명세서 2.4) — 누르면 그 문장이 즉시 전송(2.3) */
+                  <div className="mh__quickchips">
+                    {MED_QUICK_CHIPS.map((c) => (
+                      <button key={c} type="button" className="mh__quickchip" onClick={() => sendText(c)}>
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div ref={feedRef} className={`mh__feed${mode === 'heart' ? ' mh__feed--heart' : ''}`}>
                   {messages.map((m) =>
                     m.role === 'user' ? (
@@ -1214,7 +1206,7 @@ export default function ChatApp() {
                             ? wizard.step === 'name'
                               ? '약 이름을 알려주세요'
                               : '언제 챙길까요? (예: 아침, 21:30)'
-                            : '약 이름 질문 · "유산균 아침 등록"'
+                            : '약 이름 일부만 쳐도 돼요 · "타이레놀"'
                           : `${petName}에게 오늘 이야기를 들려주세요`
                       }
                       aria-label={`${petName}에게 말하기`}
