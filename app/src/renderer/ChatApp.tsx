@@ -143,6 +143,13 @@ const WT_LETTER_DESC: Record<string, string> = {
 }
 // 다수결(1:1이면 앞 문항 우선) — 축1: [Q1,Q2], 축3: [Q3,Q4]. 2문항이라 같으면 그 값, 다르면 앞 우선.
 const wtDecide = (first: WtLetter, second: WtLetter): WtLetter => (first === second ? first : first)
+// 과(科) — 축1(L/O) × 축3(A/I) 조합. 2번째(S/F) 해금 전엔 과 안에서 동물 2마리 중 미확정(엑셀 시트1·3·6).
+const WT_FAMILY: Record<string, { name: string; a: string; b: string }> = {
+  LA: { name: '조류', a: '매', b: '종달새' },        // L-S-A 매 / L-F-A 종달새
+  LI: { name: '들판 동물', a: '말', b: '소' },         // L-S-I 말 / L-F-I 소
+  OA: { name: '고양잇과', a: '표범', b: '호랑이' },    // O-S-A 표범 / O-F-A 호랑이
+  OI: { name: '밤숲 동물', a: '올빼미', b: '고슴도치' }, // O-S-I 올빼미 / O-F-I 고슴도치
+}
 const MED_ENTRY_ACTIONS: { label: string; action: QuickAction }[] = [
   { label: '💊 약 등록', action: 'reg' },
   { label: '🔍 약 물어보기', action: 'ask' },
@@ -385,6 +392,8 @@ export default function ChatApp() {
   // 업무유형 테스트 설문 모달 — step: 0~3 문항, 'result' 결과(첫 두 글자). answers 는 각 문항 선택 글자.
   const [wtStep, setWtStep] = useState<number | 'result' | null>(null) // null=닫힘
   const [wtAnswers, setWtAnswers] = useState<WtLetter[]>([])
+  const [wtDone, setWtDone] = useState(false) // 설문 1회 완료 → 리포트 카드가 결과(과 공개) 상태로
+  const [hrvOpen, setHrvOpen] = useState(false) // HRV 측정 모달(QR) — UI만, 로직 추후
   const [version, setVersion] = useState('') // 현재 설치 버전 (설정 하단 표시)
   const [update, setUpdate] = useState<UpdateInfo | null>(null) // 최신 릴리스 비교 결과
   const [checkingUpdate, setCheckingUpdate] = useState(false)
@@ -765,7 +774,7 @@ export default function ChatApp() {
   }
 
   // ── 업무유형 테스트 설문 ──
-  const wtStart = (): void => { setWtAnswers([]); setWtStep(0) } // 시작·재설문
+  const wtStart = (): void => { setWtAnswers([]); setWtStep(0) } // 시작·재설문(답만 초기화, 완료 플래그는 유지)
   const wtClose = (): void => setWtStep(null)
   const wtPick = (letter: WtLetter): void => {
     const next = [...wtAnswers, letter]
@@ -773,9 +782,11 @@ export default function ChatApp() {
     if (typeof wtStep === 'number' && wtStep < WT_QUESTIONS.length - 1) setWtStep(wtStep + 1)
     else setWtStep('result')
   }
+  const wtSeeCard = (): void => { setWtDone(true); setWtStep(null) } // '결과 카드 보기' — 리포트 카드가 과 공개 상태로
   // 결과 첫 두 글자 — 축1(Q1,Q2 다수결)·축3(Q3,Q4 다수결). 2·4번째는 리듬·HRV 해금 전이라 '?'
   const wtAxis1: WtLetter | null = wtAnswers.length >= 2 ? wtDecide(wtAnswers[0], wtAnswers[1]) : null
   const wtAxis3: WtLetter | null = wtAnswers.length >= 4 ? wtDecide(wtAnswers[2], wtAnswers[3]) : null
+  const wtFamily = wtAxis1 && wtAxis3 ? WT_FAMILY[`${wtAxis1}${wtAxis3}`] : null // 과(科) 정보
 
   const submitGui = (formMsgId: number): void => {
     if (!gName.trim()) return
@@ -1324,21 +1335,35 @@ export default function ChatApp() {
                 {/* ═══ 나 ═══ */}
                 <div className="mh__rep-sec">나</div>
 
-                {/* 2.4 업무유형 테스트 — 4글자 유형, 축별 해금 조건·사유 */}
+                {/* 2.4 업무유형 테스트 — 설문 전: 잠금 / 설문 후: 과(科) 공개 + HRV 측정 */}
                 <div className="mh__card mh__rep-type">
                   <div className="mh__type-pill">🧭 업무유형 테스트</div>
-                  <div className="mh__type-q" aria-hidden>?</div>
-                  <div className="mh__type-title">나는 어떤 동물일까?</div>
-                  <p className="mh__type-sub">설문 1분 × 키보드 리듬 × HRV로 찾는 내 업무 유형</p>
+
+                  {wtDone && wtFamily ? (
+                    /* ── 설문 완료 후: 과 공개 상태 ── */
+                    <>
+                      <div className="mh__type-title">{wtFamily.name} · {wtFamily.a}일까, {wtFamily.b}일까?</div>
+                      <div className="mh__type-stage">
+                        {petImg && <img className="mh__type-face" src={petImg} alt="" aria-hidden draggable={false} />}
+                        <button type="button" className="mh__hrv-btn" onClick={() => setHrvOpen(true)}>💓<br />HRV<br />측정</button>
+                      </div>
+                      <p className="mh__type-sub">과(科) 공개 · 리듬 5일이면 동물 확정, HRV 4회면 수식어까지 (예: 매 · “출근 2시간 만에 오늘 일을 다 끝내는 사람”)</p>
+                    </>
+                  ) : (
+                    /* ── 설문 전: 잠금 ── */
+                    <>
+                      <div className="mh__type-q" aria-hidden>?</div>
+                      <div className="mh__type-title">나는 어떤 동물일까?</div>
+                      <p className="mh__type-sub">설문 1분 × 키보드 리듬 × HRV로 찾는 내 업무 유형</p>
+                    </>
+                  )}
+
                   <div className="mh__type-code">
                     {[wtAxis1, '?', wtAxis3, '?'].map((c, i) => {
                       const ch = c ?? '?'
+                      const tip = ch !== '?' ? WT_LETTER_DESC[ch] : i === 1 ? '부하 패턴(S/F) · 키보드 리듬 5일 이상 관찰 후 공개' : i === 3 ? '회복 탄력(R/G) · HRV 1분 측정 4회 이상 후 공개' : '설문을 하면 공개돼요'
                       return (
-                        <span
-                          key={i}
-                          className={`mh__type-letter${ch !== '?' ? ' on' : ''}`}
-                          title={ch !== '?' ? WT_LETTER_DESC[ch] : i === 1 ? '부하 패턴(S/F) · 키보드 리듬 5일 이상 관찰 후 공개' : i === 3 ? '회복 탄력(R/G) · HRV 1분 측정 4회 이상 후 공개' : undefined}
-                        >
+                        <span key={i} className={`mh__type-letter${ch !== '?' ? ' on' : ''}`} data-tip={tip}>
                           {ch}
                         </span>
                       )
@@ -1346,7 +1371,7 @@ export default function ChatApp() {
                   </div>
                   <p className="mh__type-hint">글자에 마우스를 올리면 뜻이 보여요</p>
                   <button type="button" className="mh__type-start" onClick={wtStart}>
-                    {wtAxis1 ? '🔁 설문 다시 하기' : '📋 1분 설문으로 시작하기'}
+                    {wtDone || wtAxis1 ? '🔁 설문 다시 하기' : '📋 1분 설문으로 시작하기'}
                   </button>
                   <ul className="mh__type-unlock">
                     <li><b>2</b> 부하 패턴 (S/F) · 키보드 리듬 5일 이상 관찰 · 진행 3/5일</li>
@@ -1680,7 +1705,7 @@ export default function ChatApp() {
                   {[wtAxis1, '?', wtAxis3, '?'].map((c, i) => {
                     const ch = c ?? '?'
                     return (
-                      <span key={i} className={`mh__type-letter${ch !== '?' ? ' on' : ''}`} title={ch !== '?' ? WT_LETTER_DESC[ch] : undefined}>
+                      <span key={i} className={`mh__type-letter${ch !== '?' ? ' on' : ''}`} data-tip={ch !== '?' ? WT_LETTER_DESC[ch] : undefined}>
                         {ch}
                       </span>
                     )
@@ -1690,10 +1715,25 @@ export default function ChatApp() {
                   <li><b>2번째 글자</b>는 키보드 리듬을 5일 지켜봐야 해요 · 느낌과 실제 패턴이 자주 다르거든요</li>
                   <li><b>4번째 글자</b>는 1분 측정 4회 · 여러 날 평균이어야 내 기준선이 생겨요</li>
                 </ul>
-                <button type="button" className="mh__wt-done" onClick={wtClose}>결과 카드 보기</button>
+                <button type="button" className="mh__wt-done" onClick={wtSeeCard}>결과 카드 보기</button>
                 <button type="button" className="mh__wt-retry" onClick={wtStart}>설문 다시 하기</button>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── HRV 측정 모달(QR) — UI 껍데기, QR·측정 로직 추후 ── */}
+      {hrvOpen && (
+        <div className="mh__wt-dim" onClick={() => setHrvOpen(false)}>
+          <div className="mh__hrv-modal" role="dialog" aria-label="HRV 측정" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="mh__wt-x" onClick={() => setHrvOpen(false)} aria-label="닫기">✕</button>
+            {/* QR 자리 — 추후 실제 QR 삽입 */}
+            <div className="mh__hrv-qr" aria-label="QR 코드 자리" />
+            <div className="mh__hrv-title">폰 카메라로 QR을 찍어주세요</div>
+            <p className="mh__hrv-sub">손끝을 카메라에 1분간 · 끝나면<br />워크타입 네 번째 글자에 가까워져요</p>
+            <div className="mh__hrv-count">측정 2/4회 · 하루 최대 2회</div>
+            <button type="button" className="mh__wt-done mh__hrv-close" onClick={() => setHrvOpen(false)}>닫기</button>
           </div>
         </div>
       )}
