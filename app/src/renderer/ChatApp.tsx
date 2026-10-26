@@ -52,6 +52,8 @@ interface ChatMessage {
   suggestRelief?: boolean
   actions?: { label: string; action: QuickAction }[] // 말풍선 안 선택 버튼
   form?: boolean // 말풍선 안 GUI 등록 폼
+  candidates?: CatalogItem[] // 약 검색 후보(약지도 대화 안에서 선택 → 등록)
+  regProduct?: CatalogItem // 후보 선택 후 시간입력 폼이 등록할 제품
   ts?: number // 작성 시각(ms) — 마음관리 대화 24시간 로컬 보관·만료 판정용. 저장 메시지에만 채움
   mood?: boolean // 기분 체크 문답(오늘 기분:…)은 서버 history·보관에서 제외하기 위한 표시
 }
@@ -658,12 +660,7 @@ export default function ChatApp() {
   }
 
   const handleMedMessage = (text: string, thinkingId: number, started: number): void => {
-    if (wizard || tryParseRegister(text)) {
-      setWizard(null)
-      setMode('settings')
-      resolveThinking(thinkingId, { role: 'pet', text: '설정 탭에서 제품을 검색하고 후보를 선택해 등록해주세요.' }, started)
-      return
-    }
+    // '오늘 약 보여줘' — 등록된 약 목록
     if (/오늘/.test(text) && /약|복약/.test(text)) {
       const lines = config.medications.map(
         (m) => `· ${m.name} ${m.times.map(fmtTime).join(', ')} ${takenToday(m.id) ? '✅ 완료' : '⬜ 아직'}`,
@@ -673,21 +670,31 @@ export default function ChatApp() {
         {
           role: 'pet',
           text:
-            lines.length > 0 ? `오늘의 복약이에요!\n${lines.join('\n')}` : '아직 등록된 약이 없어요. 아래에서 등록해보세요!',
-          actions: MED_ENTRY_ACTIONS,
+            lines.length > 0 ? `오늘의 복약이에요!\n${lines.join('\n')}` : '아직 등록된 약이 없어요. 약 이름을 쳐서 등록해보세요!',
         },
         started,
       )
       return
     }
+    // '유산균 아침 등록'처럼 등록 의도면 약 이름만 뽑아 검색(시간 지정은 후보 선택 후 폼에서)
+    const parsed = tryParseRegister(text)
+    const query = parsed?.name?.trim() || text
+    // 약 이름으로 검색 → 후보를 대화 안에서 보여주고, 선택하면 약지도 안에서 바로 등록
     window.careApi
-      .searchDrug(text)
+      .searchDrug(query)
       .then((res) => {
         if (res.error) {
           resolveThinking(thinkingId, { role: 'pet', text: res.error }, started)
         } else if (res.items.length > 0) {
-          const item = res.items[0]
-          resolveThinking(thinkingId, { role: 'pet', text: `${item.product_name} · ${item.manufacturer_name ?? ''}\n등록은 설정 탭에서 검색 후보를 선택해주세요.` }, started)
+          resolveThinking(
+            thinkingId,
+            {
+              role: 'pet',
+              text: `‘${query}’ 검색 결과예요. 등록할 약을 골라주세요 💊`,
+              candidates: res.items,
+            },
+            started,
+          )
         } else {
           resolveThinking(
             thinkingId,
@@ -699,6 +706,24 @@ export default function ChatApp() {
       .catch(() =>
         resolveThinking(thinkingId, { role: 'pet', text: '앗, 지금 정보를 가져오는 데 문제가 생겼어요. 잠시 후 다시 시도해 주세요!' }, started),
       )
+  }
+  // 약지도 대화에서 후보 선택 → 시간입력 폼 메시지 push
+  const pickCandidate = (msgId: number, product: CatalogItem): void => {
+    // 후보 버튼 제거(재클릭 방지)
+    setFeeds((prev) => ({ ...prev, med: prev.med.map((m) => (m.id === msgId ? { ...m, candidates: undefined } : m)) }))
+    setGTimes(['09:00'])
+    push({ role: 'pet', text: `‘${product.product_name}’, 언제 챙길까요? 시간을 정해 등록해요 ⏰`, regProduct: product })
+  }
+  // 후보 선택 후 시간입력 폼에서 등록
+  const submitReg = (formMsgId: number, product: CatalogItem): void => {
+    const ok = registerMed(product.product_name, gTimes.map((t) => ({ time: t, label: t })), product)
+    setFeeds((prev) => ({ ...prev, med: prev.med.map((m) => (m.id === formMsgId ? { ...m, regProduct: undefined } : m)) }))
+    if (!ok) {
+      push({ role: 'pet', text: '이미 등록된 약·시간이에요 🙂 시간을 바꿔서 다시 등록해 주세요.' })
+      return
+    }
+    setGTimes(['09:00'])
+    push({ role: 'pet', text: `${product.product_name}, ${gTimes.join(', ')} · 매일로 등록했어요! 💊 설정 탭 ‘약 등록 관리’에서도 확인할 수 있어요.` })
   }
 
   const send = (e: FormEvent): void => {
@@ -766,9 +791,10 @@ export default function ChatApp() {
     stripActions(msgId)
     setWizard(null)
     if (action === 'reg' || action === 'reg-lui' || action === 'reg-gui') {
-      setMode('settings')
+      // 약 등록은 약지도 안에서 — 약 이름을 치면 검색 후보가 떠요
+      push({ role: 'pet', text: '등록할 약 이름을 쳐주세요! 검색해서 후보를 보여드릴게요 💊 (예: 타이레놀)' })
     } else if (action === 'ask') {
-      push({ role: 'pet', text: '제품명을 입력하면 검색 후보를 확인할 수 있어요. 등록은 설정 탭에서 진행해주세요.', actions: [HOME_ACTION] })
+      push({ role: 'pet', text: '궁금한 약 이름을 쳐주세요. 검색해서 알려드릴게요 🔍' })
     } else {
       push({ role: 'pet', text: '무엇을 도와드릴까요?', actions: MED_ENTRY_ACTIONS })
     }
@@ -1182,6 +1208,48 @@ export default function ChatApp() {
                                   {a.label}
                                 </button>
                               ))}
+                            </div>
+                          )}
+                          {/* 약 검색 후보 — 약지도 대화 안에서 선택 → 등록 */}
+                          {m.candidates && !m.thinking && (
+                            <ul className="mh__cand mh__cand--inmsg" aria-label="약 검색 후보">
+                              {m.candidates.map((item) => (
+                                <li key={`${item.item_type}-${item.product_id}`}>
+                                  <button type="button" onClick={() => pickCandidate(m.id, item)}>
+                                    {item.product_name}
+                                    <br />
+                                    <small>{item.manufacturer_name ?? '제조사 정보 없음'} · {item.item_type === 'DRUG' ? '의약품' : '건강기능식품'}</small>
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {/* 후보 선택 후 시간 입력 → 등록(약지도 안에서 완결) */}
+                          {m.regProduct && !m.thinking && (
+                            <div className="mh__guiform mh__guiform--inmsg">
+                              <div className="mh__gtimes">
+                                {gTimes.map((t, i) => (
+                                  <span key={i} className="mh__gtime">
+                                    <TimeSelect
+                                      value={t}
+                                      onChange={(v) => setGTimes((prev) => prev.map((x, idx) => (idx === i ? v : x)))}
+                                    />
+                                    {gTimes.length > 1 && (
+                                      <button onClick={() => setGTimes((prev) => prev.filter((_, idx) => idx !== i))}>−</button>
+                                    )}
+                                  </span>
+                                ))}
+                                <button className="mh__gadd" onClick={() => setGTimes((prev) => [...prev, '13:00'])}>
+                                  + 시간
+                                </button>
+                              </div>
+                              <button
+                                className="mh__gsubmit"
+                                disabled={gTimes.some((t) => !t)}
+                                onClick={() => submitReg(m.id, m.regProduct as CatalogItem)}
+                              >
+                                💊 {m.regProduct.product_name} 등록
+                              </button>
                             </div>
                           )}
                           {m.form && !m.thinking && (

@@ -1167,3 +1167,8 @@ body {
   30%, 60% { box-shadow: 0 0 0 3px rgba(255, 154, 60, 0.55); }
 }
 .mh__card--flash { animation: mhCardFlash 1.2s ease; border-color: var(--orange); }
+
+/* 약지도 대화 말풍선 안 검색 후보 리스트 */
+.mh__cand--inmsg { margin-top: 8px; max-height: 220px; }
+.mh__cand--inmsg button { background: #fffdf6; border-color: #ead9b8; }
+.mh__cand--inmsg button:hover { background: #fff3dd; border-color: #d9c097; }
