@@ -1029,7 +1029,7 @@ export default function ChatApp() {
               >
                 <span className="mh__medbar-main">
                   💊 오늘 복약 <b>{config.medications.filter((m) => takenToday(m.id)).length}/{config.medications.length}</b> 완료
-                  <span className="mh__medbar-sub"> · 도장판·순응률은 리포트에서</span>
+                  <span className="mh__medbar-sub">도장판·순응률은 리포트에서</span>
                 </span>
                 <span className="mh__medbar-go">보러가기 →</span>
               </button>

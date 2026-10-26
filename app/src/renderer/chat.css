@@ -893,7 +893,7 @@ body {
 .mh__medbar:hover { background: #fff1d4; }
 .mh__medbar-main { flex: 1; min-width: 0; }
 .mh__medbar-main b { color: #d98a1f; font-weight: 900; }
-.mh__medbar-sub { color: #a8936a; }
+.mh__medbar-sub { display: block; margin-top: 2px; color: #a8936a; }
 .mh__medbar-go {
   flex: none; font-weight: 800; color: #d98a1f; white-space: nowrap;
 }
