@@ -1177,3 +1177,21 @@ body {
 
 /* 업무유형 과 카드 — 동물 확정 전 미스터리 박스 */
 .mh__type-face--myst { image-rendering: pixelated; }
+
+/* ══ 큰 패널 — 이름바+탭+콘텐츠를 하나의 박스로 묶기(기획서) ════════════ */
+.mh__panel {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+  margin: 0 4px 2px; padding: 10px 10px 12px;
+  background: var(--cream, #fffdf6);
+  border: 2px solid #e4d9c3; border-radius: 16px;
+  position: relative;
+}
+/* 패널 안에서는 개별 박스들의 바깥 여백을 패널 패딩이 대신 → 사이 배경이 안 보이게 */
+.mh__panel .mh__petbar { margin: 0 0 8px; }
+.mh__panel .mh__updatebar { margin: 0 0 8px; }
+.mh__panel .mh__toptabs { margin: 0 0 -8px; }
+/* 패널이 큰 테두리를 가지므로 프레임 자체 테두리는 연하게(이중 테두리 방지), 배경만 유지 */
+.mh__panel .mh__frame { border-color: #e8ddc6; }
+/* 공략집 오버레이는 패널 기준으로 전체를 덮게(패널 안쪽에 맞춤) */
+.mh__panel .mh__guide { inset: 0; border-radius: 14px; }

@@ -997,6 +997,8 @@ export default function ChatApp() {
         </button>
       </header>
 
+      {/* ── 큰 패널: 이름바 + 탭 + 콘텐츠를 하나의 박스로 묶음(기획서) ── */}
+      <div className="mh__panel">
       {/* ── 펫 정보바: 이름·레벨·세대 + TODAY 배지 (작은 얼굴 아이콘 제거) ── */}
       <div className="mh__petbar">
         <span className="mh__petbar-name">{petName}</span>
@@ -1803,6 +1805,7 @@ export default function ChatApp() {
           {/* (우측 세로 책갈피 → 상단 가로 탭으로 이동. 아래 mh__toptabs 참조) */}
         </div>
       </div>
+      </div>{/* /mh__panel */}
 
       {/* ── 업무유형 테스트 설문 모달(엑셀 ver.0.5) ── */}
       {wtStep !== null && (
