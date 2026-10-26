@@ -59,7 +59,7 @@ interface ChatMessage {
   mood?: boolean // 기분 체크 문답(오늘 기분:…)은 서버 history·보관에서 제외하기 위한 표시
 }
 
-type QuickAction = 'reg' | 'ask' | 'reg-lui' | 'reg-gui' | 'home'
+type QuickAction = 'reg' | 'ask' | 'reg-lui' | 'reg-gui' | 'home' | 'edit-time' | 'edit-drug'
 
 type Wizard = null | { step: 'name' } | { step: 'time'; name: string }
 
@@ -533,25 +533,20 @@ export default function ChatApp() {
       if (err) console.error('QR 생성 실패', err)
     })
   }, [hrvOpen, config.memberId, pet?.name])
-  // 설정 '수정' → 약지도로 넘어오면 그 약 이름으로 자동 검색해서 '약 보기창'(후보)을 다시 띄움
+  // 설정 '수정' → 약지도로 넘어오면 '시간만 바꾸기 / 다른 약으로 바꾸기' 선택 버튼을 먼저 띄운다
   useEffect(() => {
     if (!editingMedId || modeRef.current !== 'med') return
     const target = config.medications.find((m) => m.id === editingMedId)
     if (!target) { setEditingMedId(null); return }
-    const thinkingId = push({ role: 'pet', text: '', thinking: true })
-    const started = Date.now()
-    push({ role: 'pet', text: `‘${target.name}’을(를) 수정할게요. 그대로 둘지, 다른 약으로 바꿀지 아래에서 골라주세요 🔧` })
-    window.careApi
-      .searchDrug(target.name)
-      .then((res) => {
-        if (res.error) resolveThinking(thinkingId, { role: 'pet', text: res.error }, started)
-        else if (res.items.length > 0)
-          resolveThinking(thinkingId, { role: 'pet', text: `‘${target.name}’ 검색 결과예요. 바꿀 약을 골라주세요 💊`, candidates: res.items }, started)
-        else
-          resolveThinking(thinkingId, { role: 'pet', text: '으음, 그 약을 다시 못 찾았어요. 바꿀 약 이름을 쳐주세요.' }, started)
-      })
-      .catch(() => resolveThinking(thinkingId, { role: 'pet', text: '앗, 정보를 가져오는 데 문제가 생겼어요. 잠시 후 다시 시도해 주세요!' }, started))
-    // 이 effect는 editingMedId가 바뀔 때 1회만 — mode는 ref로 확인(의존성 제외해 중복 검색 방지)
+    push({
+      role: 'pet',
+      text: `‘${target.name}’(매일 ${target.times.map(fmtTime).join(', ')})을(를) 어떻게 수정할까요? 🔧`,
+      actions: [
+        { label: '⏰ 시간만 바꾸기', action: 'edit-time' },
+        { label: '💊 다른 약으로 바꾸기', action: 'edit-drug' },
+      ],
+    })
+    // editingMedId가 바뀔 때 1회만 — mode는 ref로 확인(의존성 제외해 중복 방지)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingMedId])
   const waterToday = intake.waterDayStart === startOfLocalDay(Date.now()) ? intake.waterCups : 0 // 오늘 마신 물(2#16)
@@ -875,7 +870,23 @@ export default function ChatApp() {
   const handleAction = (msgId: number, action: QuickAction): void => {
     stripActions(msgId)
     setWizard(null)
-    if (action === 'reg' || action === 'reg-lui' || action === 'reg-gui') {
+    if (action === 'edit-time') {
+      // 시간만 바꾸기 — 기존 약을 그대로 두고 시간 폼만 띄움(약 이름 안 바뀌므로 복약 기록 유지됨)
+      const target = editingMedId ? config.medications.find((m) => m.id === editingMedId) : null
+      if (!target) { setEditingMedId(null); push({ role: 'pet', text: '수정할 약을 찾지 못했어요. 설정에서 다시 눌러주세요.' }); return }
+      const asProduct: CatalogItem = {
+        item_type: target.item_type ?? 'DRUG',
+        product_id: target.product_id ?? 0,
+        external_id: target.external_id ?? null,
+        product_name: target.name,
+        manufacturer_name: target.manufacturer_name ?? null,
+      }
+      setGTimes(target.times.length > 0 ? [...target.times] : ['09:00'])
+      push({ role: 'pet', text: `‘${target.name}’, 몇 시로 바꿀까요? ⏰`, regProduct: asProduct })
+    } else if (action === 'edit-drug') {
+      // 다른 약으로 바꾸기 — 바꿀 약 이름을 치면 검색 후보가 뜸(선택 후 교체)
+      push({ role: 'pet', text: '바꿀 약 이름을 쳐주세요. 검색해서 보여드릴게요 💊 (예: 타이레놀)' })
+    } else if (action === 'reg' || action === 'reg-lui' || action === 'reg-gui') {
       // 약 등록은 약지도 안에서 — 약 이름을 치면 검색 후보가 떠요
       push({ role: 'pet', text: '등록할 약 이름을 쳐주세요! 검색해서 후보를 보여드릴게요 💊 (예: 타이레놀)' })
     } else if (action === 'ask') {
