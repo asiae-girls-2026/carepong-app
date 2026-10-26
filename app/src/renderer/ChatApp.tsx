@@ -295,24 +295,14 @@ export default function ChatApp() {
   const [wizard, setWizard] = useState<Wizard>(null)
   const [mood, setMood] = useState<string | null>(null)
   const [guideOpen, setGuideOpen] = useState(false)
-  // 채팅창 넓게 보기 — 켜면 오른쪽 책갈피 탭을 숨겨 채팅 영역을 넓게 쓴다(건의 반영). 선택은 기기에 기억.
-  const [wideChat, setWideChat] = useState<boolean>(() => {
+  // 채팅창 넓게 보기 — 확대 버튼은 제거(기획서). 저장된 값이 있으면 레이아웃만 반영.
+  const [wideChat] = useState<boolean>(() => {
     try {
       return localStorage.getItem('mh_wideChat') === '1'
     } catch {
       return false
     }
   })
-  const toggleWide = (): void =>
-    setWideChat((v) => {
-      const next = !v
-      try {
-        localStorage.setItem('mh_wideChat', next ? '1' : '0')
-      } catch {
-        /* 저장 실패해도 토글은 동작 */
-      }
-      return next
-    })
   const [demoOn, setDemoOn] = useState(false)
   const [gName, setGName] = useState('')
   const [gTimes, setGTimes] = useState<string[]>(['09:00'])
@@ -325,7 +315,6 @@ export default function ChatApp() {
   const [expandedDay, setExpandedDay] = useState<string | null>(null)
   const [petPage, setPetPage] = useState(0)
   const [diaryPage, setDiaryPage] = useState(0)
-  const [calYM, setCalYM] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() } })
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
   const [selectedProduct, setSelectedProduct] = useState<CatalogItem | null>(null)
   const [searchStatus, setSearchStatus] = useState('')
@@ -1037,18 +1026,7 @@ export default function ChatApp() {
 
             {mode === 'heart' && (
               <>
-                <div className="mh__chips">
-                  <button className="mh__chip" onClick={() => window.careApi.openRelief()}>🫧 1분 쉬어가기</button>
-                  <button
-                    className="mh__wide"
-                    style={{ marginLeft: 'auto' }}
-                    onClick={toggleWide}
-                    title={wideChat ? '책갈피 다시 보기' : '채팅창 넓게 보기'}
-                    aria-label={wideChat ? '책갈피 다시 보기' : '채팅창 넓게 보기'}
-                  >
-                    {wideChat ? '⤡' : '⤢'}
-                  </button>
-                </div>
+                {/* 기획서 순서: ① 오늘 기분 어때요? → ② 1분 쉬어가기 → 채팅. 일기장 달력은 리포트 탭으로 이동 */}
                 {!mood && !moodDoneToday && (
                 <div className="mh__card">
                   <div className="mh__card-head">오늘 기분 어때요?</div>
@@ -1067,41 +1045,8 @@ export default function ChatApp() {
                 </div>
                 )}
 
-                {/* 📔 마음 일기장 — (1단계) 아카이브에서 마음관리 탭으로 이동. 배치 다듬기는 2단계 */}
-                <div className="mh__card">
-                  <div className="mh__card-head">
-                    📔 마음 일기장
-                    <span className="mh__pets-nav">
-                      <button onClick={() => setCalYM((v) => { const d = new Date(v.y, v.m - 1, 1); return { y: d.getFullYear(), m: d.getMonth() } })} aria-label="이전 달">◀</button>
-                      <button onClick={() => setCalYM((v) => { const d = new Date(v.y, v.m + 1, 1); return { y: d.getFullYear(), m: d.getMonth() } })} aria-label="다음 달">▶</button>
-                    </span>
-                  </div>
-                  <p className="mh__cal-title">{calYM.y}년 {calYM.m + 1}월</p>
-                  <div className="mh__cal">
-                    {['일', '월', '화', '수', '목', '금', '토'].map((w) => (
-                      <span key={w} className="mh__cal-wd">{w}</span>
-                    ))}
-                    {Array.from({ length: new Date(calYM.y, calYM.m, 1).getDay() }, (_, i) => (
-                      <span key={`b${i}`} className="mh__cal-cell mh__cal-cell--empty" />
-                    ))}
-                    {Array.from({ length: new Date(calYM.y, calYM.m + 1, 0).getDate() }, (_, i) => {
-                      const day = i + 1
-                      const key = `${calYM.y}-${String(calYM.m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-                      const e = diary[key]
-                      const isToday = key === dayKeyOf(Date.now())
-                      return (
-                        <span
-                          key={key}
-                          className={`mh__cal-cell${isToday ? ' mh__cal-cell--today' : ''}${e?.mood ? ' mh__cal-cell--has' : ''}`}
-                          title={e?.mood ? `${e.mood} ${e.moodLabel ?? ''}`.trim() : undefined}
-                        >
-                          <em>{day}</em>
-                          {e?.mood && <span className="mh__cal-mood">{e.mood}</span>}
-                        </span>
-                      )
-                    })}
-                  </div>
-                  <p className="mh__empty mh__cal-hint">날짜마다 그날 고른 기분 이모지가 쌓여요 😊</p>
+                <div className="mh__chips">
+                  <button className="mh__chip" onClick={() => window.careApi.openRelief()}>🫧 1분 쉬어가기</button>
                 </div>
               </>
             )}
