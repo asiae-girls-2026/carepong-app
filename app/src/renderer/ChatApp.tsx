@@ -1108,17 +1108,7 @@ export default function ChatApp() {
 
             {mode === 'med' || mode === 'heart' ? (
               <>
-                {mode === 'med' && (
-                  /* 퀵리플라이 칩(명세서 2.4) — 누르면 그 문장이 즉시 전송(2.3) */
-                  <div className="mh__quickchips">
-                    {MED_QUICK_CHIPS.map((c) => (
-                      <button key={c} type="button" className="mh__quickchip" onClick={() => sendText(c)}>
-                        {c}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <div ref={feedRef} className={`mh__feed${mode === 'heart' ? ' mh__feed--heart' : ''}`}>
+                <div ref={feedRef} className={`mh__feed${mode === 'heart' ? ' mh__feed--heart' : ''}${mode === 'med' ? ' mh__feed--med' : ''}`}>
                   {messages.map((m) =>
                     m.role === 'user' ? (
                       <div key={m.id} className="msg msg--user">
@@ -1190,6 +1180,16 @@ export default function ChatApp() {
                             </div>
                           )}
                         </div>
+                        {/* 퀵리플라이 칩(명세서 2.4) — 첫 안내 말풍선 아래 · 누르면 즉시 전송(2.3) */}
+                        {mode === 'med' && m.id === 1 && (
+                          <div className="mh__quickchips">
+                            {MED_QUICK_CHIPS.map((c) => (
+                              <button key={c} type="button" className="mh__quickchip" onClick={() => sendText(c)}>
+                                {c}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ),
                   )}

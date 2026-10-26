@@ -899,14 +899,21 @@ body {
 }
 
 /* 퀵리플라이 칩(2.4): 누르면 즉시 전송(2.3) */
+/* 퀵리플라이 칩 — 첫 안내 말풍선 아래, 아바타 폭만큼 들여쓰기(기획서) */
 .mh__quickchips {
-  display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px;
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin: 6px 0 2px 76px;
 }
 .mh__quickchip {
-  flex: none; padding: 6px 11px;
-  font-size: 11px; font-weight: 700; color: #4a7a63;
-  background: #fff; border: 1.5px solid #bfe4d2; border-radius: 999px;
+  flex: none; padding: 6px 12px;
+  font-size: 11px; font-weight: 700; color: #6a5fb0;
+  background: #fff; border: 1.5px solid #cdc6ef; border-radius: 999px;
   cursor: pointer; transition: background .12s, border-color .12s;
 }
-.mh__quickchip:hover { background: #eafaf1; border-color: #8fc9ab; }
-.mh__quickchip:active { background: #d8f0e2; }
+.mh__quickchip:hover { background: #f1eefb; border-color: #b4aae6; }
+.mh__quickchip:active { background: #e6e1f7; }
+
+/* 약지도 채팅 속 펫 아바타 크게(기획서) */
+.mh__feed--med .msg__avatar-img { width: 72px; height: 72px; margin-right: -2px; }
+.mh__feed--med .msg__avatar { width: 56px; height: 56px; font-size: 26px; }
+.mh__feed--med .msg--pet { align-items: center; gap: 2px; }
