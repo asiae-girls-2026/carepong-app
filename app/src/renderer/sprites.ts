@@ -116,3 +116,15 @@ for (const [path, url] of Object.entries(dexModules)) {
   if (m) dexImgs[m[1]] = url
 }
 export const dexImg = (name: string): string | undefined => dexImgs[name]
+
+// ── 업무유형 테스트 결과 에셋 (assets/worktype/<수식어>_<동물>.png) ──
+// 수식어: steel(강철 R) · soft(뭉근한 G) / 동물 8종: hawk lark pony ox leopard tiger owl hedgehog
+// 4글자 완성 시 최종 캐릭터(수식어+동물) 16종. key 예: 'steel_hawk'
+const worktypeModules = import.meta.glob('./assets/worktype/*.png', { eager: true, import: 'default' }) as Record<string, string>
+const worktypeImgs: Record<string, string> = {}
+for (const [path, url] of Object.entries(worktypeModules)) {
+  const m = path.match(/worktype\/(.+)\.png$/)
+  if (m) worktypeImgs[m[1]] = url
+}
+// key = `${modifier}_${animal}` (예: 'steel_hawk', 'soft_owl')
+export const worktypeImg = (key: string): string | undefined => worktypeImgs[key]
