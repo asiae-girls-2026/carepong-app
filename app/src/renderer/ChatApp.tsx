@@ -2,7 +2,7 @@
 // 탭 3종: 💛 마음관리 / 📔 아카이브(도감) / ⚙️ 설정 (약 등록은 설정 안으로 · 기획서 10·11번)
 // 약 등록은 LUI(대화)·GUI(폼) 두 경로 제공 + 소요시간 자동 계측 → LUI vs GUI 비교 테스트용
 // 공감 응답: 서버 /chat(Bedrock, 10/14 1차 연동) → 실패 시 core/empathy.ts 규칙 응답 폴백. 위기 키워드는 서버에 안 보냄. 약설명은 규칙 기반(core/drugData.ts)
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Fragment, useEffect, useRef, useState, type FormEvent } from 'react'
 import type { CatalogItem } from '../core/catalog'
 import type { DrugInfo } from '../core/drugData'
 import type { Pet } from '../core/types'
@@ -1115,7 +1115,8 @@ export default function ChatApp() {
                         <p>{m.text}</p>
                       </div>
                     ) : (
-                      <div key={m.id} className="msg msg--pet">
+                      <Fragment key={m.id}>
+                      <div className="msg msg--pet">
                         {petImg ? (
                           <img className="msg__avatar-img" src={petImg} alt="" aria-hidden draggable={false} />
                         ) : (
@@ -1180,17 +1181,18 @@ export default function ChatApp() {
                             </div>
                           )}
                         </div>
-                        {/* 퀵리플라이 칩(명세서 2.4) — 첫 안내 말풍선 아래 · 누르면 즉시 전송(2.3) */}
-                        {mode === 'med' && m.id === 1 && (
-                          <div className="mh__quickchips">
-                            {MED_QUICK_CHIPS.map((c) => (
-                              <button key={c} type="button" className="mh__quickchip" onClick={() => sendText(c)}>
-                                {c}
-                              </button>
-                            ))}
-                          </div>
-                        )}
                       </div>
+                      {/* 퀵리플라이 칩(명세서 2.4) — 안내 말풍선 "아래" 독립 줄 · 누르면 즉시 전송(2.3) */}
+                      {mode === 'med' && m.id === 1 && (
+                        <div className="mh__quickchips">
+                          {MED_QUICK_CHIPS.map((c) => (
+                            <button key={c} type="button" className="mh__quickchip" onClick={() => sendText(c)}>
+                              {c}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      </Fragment>
                     ),
                   )}
                 </div>

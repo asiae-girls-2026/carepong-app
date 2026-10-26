@@ -899,10 +899,10 @@ body {
 }
 
 /* 퀵리플라이 칩(2.4): 누르면 즉시 전송(2.3) */
-/* 퀵리플라이 칩 — 첫 안내 말풍선 아래, 왼쪽부터 가로로(기획서) · 넘치면 줄바꿈 */
+/* 퀵리플라이 칩 — 안내 말풍선 "아래" 독립 줄, 왼쪽부터 가로로(기획서) · 넘치면 줄바꿈 */
 .mh__quickchips {
   display: flex; flex-wrap: wrap; gap: 6px;
-  margin: 8px 0 2px 52px;
+  margin: 2px 0 2px 46px;
 }
 .mh__quickchip {
   flex: 0 1 auto; padding: 6px 12px;
@@ -914,9 +914,9 @@ body {
 .mh__quickchip:hover { background: #f3f1f8; border-color: #c3bbdb; }
 .mh__quickchip:active { background: #eae6f2; }
 
-/* 약지도 채팅 속 펫 아바타 — 마음관리와 같은 크기, 말풍선 공간 보존 */
-.mh__feed--med .msg__avatar-img { width: 48px; height: 48px; margin-right: -2px; }
-.mh__feed--med .msg__avatar { width: 44px; height: 44px; font-size: 22px; }
-.mh__feed--med .msg--pet { align-items: center; gap: 4px; }
-/* 말풍선이 바깥 프레임선에 안 닿게 폭 약간 줄임 */
-.mh__feed--med .msg__bubble { max-width: 78%; }
+/* 약지도 채팅 속 펫 아바타 — 작게 유지해 말풍선이 가로로 펴지게(기획서) */
+.mh__feed--med .msg__avatar-img { width: 40px; height: 40px; margin-right: -2px; }
+.mh__feed--med .msg__avatar { width: 38px; height: 38px; font-size: 20px; }
+.mh__feed--med .msg--pet { align-items: flex-start; gap: 6px; }
+/* 말풍선 가로로 넓게, 바깥선엔 안 닿게 */
+.mh__feed--med .msg__bubble { max-width: 82%; }
