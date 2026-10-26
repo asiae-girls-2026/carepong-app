@@ -953,8 +953,8 @@ export default function ChatApp() {
         </button>
       </nav>
 
-      <div className="mh__frame">
-        {guideOpen && (
+      {/* 공략집 — 미니홈 전체를 덮는 오버레이(프레임 밖). X 누르면 원래 화면 복귀 */}
+      {guideOpen && (
           <div className="mh__guide" role="dialog" aria-label="키우기 공략집">
             <div className="mh__guide-head">
               📖 케어퐁 공략집
@@ -1019,7 +1019,9 @@ export default function ChatApp() {
               졸업하고 <b>새 모습의 아기로 환생</b>! 세대가 +1 돼요.<br />먼저 살던 아이는 이 집에 남아서 계속 같이 살아요.
             </p>
           </div>
-        )}
+      )}
+
+      <div className="mh__frame">
         {/* ── 마이룸(home) 탭에서만: 미니룸 + 펫상태 + 오늘의 하트 (하나의 큰 흰 박스로 묶음) ── */}
         {mode === 'home' && (<div className="mh__homebox">
         {/* 미니룸 — 가구: 창문·액자·시계·책장·침대·화분·스탠드 */}
