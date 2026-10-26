@@ -51,8 +51,8 @@ import { petPixelSize, spriteUrl, poseUrl } from './sprites'
 
 type Reminder = { kind: ReminderKind; id: string; label: string; alarmId?: string; shownAt?: string }
 const SNOOZE_MS = 10 * 60 * 1000 // 놓치거나 '나중에' 누르면 10분 뒤 재알림(고정) — 확인할 때까지 반복. 확인하면 그때부터 설정 간격 재시작
-const REMINDER_AUTO_MS = 30 * 1000 // 무응답 시 자동 닫힘(벌점 없음 · 클릭 가로채기 방지)
-const REMINDER_AUTO_MED_MS = 10 * 60 * 1000 // 복약은 약 먹고 돌아와 확인하는 경우가 많아 길게(10분). 확인 전에 꺼지는 문제 방지
+const REMINDER_AUTO_MS = 10 * 60 * 1000 // 모든 알람 유지 10분(제안 반영) — 자리 비우고 돌아와 응답할 시간 확보. 벌점 없음
+const REMINDER_AUTO_MED_MS = 10 * 60 * 1000 // 복약도 10분(기존)
 
 // 한글 받침 유무로 조사 선택 — 이름+조사. 받침 있으면 withB("둥"+"이"→"둥이"), 없으면 withoutB("퐁이"+"가"→"퐁이가")
 const josa = (name: string, withB: string, withoutB: string): string => {
@@ -211,6 +211,11 @@ export default function App() {
   const reminderRef = useRef<Reminder | null>(null)
   const reminderAutoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reminderElRef = useRef<HTMLDivElement | null>(null) // 알람 팝업 DOM — hover 영역 정확 판정용
+  // 겹친 알람 대기열 — 메인(reminder)이 떠 있는 10분 사이 도래한 알람들. 표시는 1개 더 + "+N"(제안 반영).
+  const [extras, setExtras] = useState<Reminder[]>([])
+  const extrasRef = useRef<Reminder[]>([])
+  const extraTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const setExtrasBoth = (next: Reminder[]): void => { extrasRef.current = next; setExtras(next) }
   const snoozeRef = useRef<Record<string, number>>({})
   const manualDndRef = useRef(false)
   const autoNightRef = useRef<boolean | null>(null) // 야간 방해금지 진입/해제 감지(최초 null=부팅 시 말풍선 억제)
@@ -305,22 +310,52 @@ export default function App() {
     ...(r.kind === 'medication' ? { local_medication_id: r.id } : {}),
   })
   // ── 알람 처리 ──
+  // 대기열 알람의 개별 타이머 해제
+  const clearExtraTimer = (alarmId: string): void => {
+    const t = extraTimers.current.get(alarmId)
+    if (t) { clearTimeout(t); extraTimers.current.delete(alarmId) }
+  }
+  // 대기열 전체 비우기(방해금지·숨김 등) — 타이머까지 모두 해제, 승급 없음
+  const clearAllExtras = (): void => {
+    for (const t of extraTimers.current.values()) clearTimeout(t)
+    extraTimers.current.clear()
+    setExtrasBoth([])
+  }
+  // 대기열에서 알람 1개 제거(응답·무응답 공통). 메인이 비어 있으면 대기열 맨 앞을 메인으로 '승급'한다.
+  const removeExtra = (alarmId: string): void => {
+    clearExtraTimer(alarmId)
+    const rest = extrasRef.current.filter((e) => e.alarmId !== alarmId)
+    setExtrasBoth(rest)
+    promoteIfNeeded()
+  }
+  // 메인(reminder)이 비어 있고 대기열이 있으면 맨 앞을 메인으로 끌어올린다.
+  const promoteIfNeeded = (): void => {
+    if (reminderRef.current) return
+    const next = extrasRef.current[0]
+    if (!next) return
+    clearExtraTimer(next.alarmId as string)
+    setExtrasBoth(extrasRef.current.slice(1))
+    reminderRef.current = next
+    setReminder(next)
+    if (reminderAutoTimer.current) clearTimeout(reminderAutoTimer.current)
+    reminderAutoTimer.current = setTimeout(missReminder, next.kind === 'medication' ? REMINDER_AUTO_MED_MS : REMINDER_AUTO_MS)
+  }
   const clearReminder = (): void => {
     if (reminderAutoTimer.current) clearTimeout(reminderAutoTimer.current)
     reminderAutoTimer.current = null
     reminderRef.current = null
     setReminder(null)
+    // 대기열에 남은 게 있으면 승급, 없으면 클릭통과 복구
+    if (extrasRef.current.length > 0) { promoteIfNeeded(); return }
     interactive.current = false
     window.petApi.setClickThrough(true)
   }
-  const confirmReminder = (): void => {
-    const r = reminderRef.current
-    if (!r) return
+  // 알람 1건 '했어요' 처리 — 메인/대기열 공용(r로 대상 지정)
+  const confirmOne = (r: Reminder): void => {
     log('alarm_answered', 'P02', { kind: ALARM_EVENT_KIND[r.kind], answer: 'confirm', ...alarmProps(r) })
     const now = Date.now()
     if (r.kind === 'water') intakeRef.current = recordWater(intakeRef.current, now)
     else if (r.kind === 'medication') {
-      // 시간대별 기록 — '방금 도래한' 슬롯에 복약 체크(2개 이상 시간대 각각 체크용)
       const med = configRef.current.medications.find((m) => m.id === r.id)
       const slot = med ? currentDueTime(med, now, startOfLocalDay(now)) : null
       intakeRef.current = slot
@@ -331,7 +366,6 @@ export default function App() {
     else intakeRef.current = recordRest(intakeRef.current, now)
     window.petApi.saveIntake(intakeRef.current)
     const reward = ALARM_REWARD[r.kind]
-    // XP는 파트별 하루 3회까지만 (게이지는 항상 적용) — 기획서 v10
     const part: XpPart = ALARM_EVENT_KIND[r.kind]
     const grant = canGrantXp(intakeRef.current, part, now)
     if (grant) {
@@ -347,12 +381,17 @@ export default function App() {
       }
       return settle(addXp(rewarded, grant ? reward.xp : 0))
     })
-    // 건강 항목 실천(알람에 '했어요' 답) → 펫이 기뻐하는 반응: 쓰다듬→방긋 포즈 + 하트
     patUntilRef.current = Date.now() + PAT_ANIM_MS
     setHearts((h) => h + 1)
+    showGauge()
+  }
+  // 메인 알람 '했어요'
+  const confirmReminder = (): void => {
+    const r = reminderRef.current
+    if (!r) return
+    confirmOne(r)
     const wasMed = r.kind === 'medication'
     clearReminder()
-    showGauge()
     if (wasMed) setTimeout(scanDue, 150) // 2#13: 같은 시각 다음 약 바로 노출(텀 제거)
   }
   const snoozeReminder = (): void => {
@@ -373,6 +412,26 @@ export default function App() {
     }
     snoozeRef.current = { ...snoozeRef.current, [r.id]: Date.now() + SNOOZE_MS }
     clearReminder()
+  }
+  // ── 대기열(겹친) 알람 개별 처리 ──
+  const confirmExtra = (r: Reminder): void => {
+    confirmOne(r)
+    removeExtra(r.alarmId as string)
+    if (r.kind === 'medication') setTimeout(scanDue, 150)
+  }
+  const snoozeExtra = (r: Reminder): void => {
+    log('alarm_answered', 'P02', { kind: ALARM_EVENT_KIND[r.kind], answer: 'later', ...alarmProps(r) })
+    snoozeRef.current = { ...snoozeRef.current, [r.id]: Date.now() + SNOOZE_MS }
+    removeExtra(r.alarmId as string)
+  }
+  const missExtra = (r: Reminder): void => {
+    log('alarm_answered', 'P02', { kind: ALARM_EVENT_KIND[r.kind], answer: 'timeout', ...alarmProps(r) })
+    if (r.kind === 'medication') {
+      intakeRef.current = recordMiss(intakeRef.current)
+      window.petApi.saveIntake(intakeRef.current)
+    }
+    snoozeRef.current = { ...snoozeRef.current, [r.id]: Date.now() + SNOOZE_MS }
+    removeExtra(r.alarmId as string)
   }
 
   // ── 최초 로드 (옛 형식 저장데이터는 새 펫으로 시작) ──
@@ -614,20 +673,35 @@ export default function App() {
     // 복약은 길게(10분) — 자리 비우고 돌아와 '먹었어요'를 눌러도 닫히지 않게. 그 외는 30초.
     reminderAutoTimer.current = setTimeout(missReminder, r.kind === 'medication' ? REMINDER_AUTO_MED_MS : REMINDER_AUTO_MS)
   }
+  // 겹친 알람을 대기열(extras)에 추가 — 메인/이미 대기 중인 것과 같은 알람(id)은 중복 추가 안 함. 각자 10분 타이머.
+  const enqueueExtra = (d: { kind: ReminderKind; id: string; label: string }, now: number): void => {
+    if (reminderRef.current?.id === d.id) return
+    if (extrasRef.current.some((e) => e.id === d.id)) return
+    const r: Reminder = { ...d, alarmId: crypto.randomUUID(), shownAt: new Date(now).toISOString() }
+    setExtrasBoth([...extrasRef.current, r])
+    log('alarm_shown', 'P02', { kind: ALARM_EVENT_KIND[r.kind], ...alarmProps(r) })
+    extraTimers.current.set(r.alarmId as string, setTimeout(() => missExtra(r), r.kind === 'medication' ? REMINDER_AUTO_MED_MS : REMINDER_AUTO_MS))
+  }
   const scanDue = (): void => {
-    if (reminderRef.current || namingRef.current || rebirthRef.current) return
+    if (namingRef.current || rebirthRef.current) return
     if (stressAlertRef.current || reliefOpenRef.current) return
     if (!petRef.current) return
     window.petApi.loadConfig().then((cfg) => {
       configRef.current = cfg
-      if (reminderRef.current) return
       const now = Date.now()
       if (isResting(now)) return
       const due = dueReminders(cfg, intakeRef.current, now, sessionStart.current).filter(
         (d) => (snoozeRef.current[d.id] ?? 0) < now,
       )
       if (due.length === 0) return
-      presentReminder(due[0], now)
+      if (!reminderRef.current) {
+        // 메인이 비어 있으면 첫 알람을 메인으로, 나머지는 대기열로
+        presentReminder(due[0], now)
+        for (const d of due.slice(1)) enqueueExtra(d, now)
+      } else {
+        // 메인이 떠 있으면 새로 도래한 것들을 대기열에 쌓는다(10분 유지 중 겹침)
+        for (const d of due) enqueueExtra(d, now)
+      }
     })
   }
   // 30초 주기 점검 — 약 확인 직후엔 confirmReminder에서 즉시 scanDue 재호출(2#13: 같은 시각 다음 약 바로 노출)
@@ -1079,9 +1153,10 @@ export default function App() {
         setManualDnd(on)
         log('dnd_toggle', 'P08', { on, src: 'menu', hour: new Date().getHours() })
         saveNow() // 토글 즉시 저장·전송(putPet dnd_manual) — 주기 저장 기다리지 않음
-        if (on && reminderRef.current) clearReminder()
+        if (on) { clearAllExtras(); if (reminderRef.current) clearReminder() }
         showBubble(on ? '방해금지 ON 😴 조용히 쉬면서 기력을 회복할게요' : '방해금지 OFF 🙆 다시 곁에 있을게요', 3500)
       } else if (command === 'hide') {
+        clearAllExtras()
         if (reminderRef.current) clearReminder()
         setHidden((h) => !h)
       } else if (command === 'nextchar') {
@@ -1303,6 +1378,25 @@ export default function App() {
                   나중에
                 </button>
               </div>
+              {/* 겹친 알람 — 1개 더 버튼과 함께, 나머지는 "+N" 표시만(제안 반영). pet.css 안 건드리게 인라인 구분선 */}
+              {extras[0] && (
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed rgba(0,0,0,0.15)' }}>
+                  <div className="pet__reminder-text">{REMINDER_UI[extras[0].kind].text(extras[0].label)}</div>
+                  <div className="pet__reminder-actions">
+                    <button className="rbtn rbtn--ok" onClick={() => confirmExtra(extras[0])}>
+                      {REMINDER_UI[extras[0].kind].ok}
+                    </button>
+                    <button className="rbtn" onClick={() => snoozeExtra(extras[0])}>
+                      나중에
+                    </button>
+                  </div>
+                </div>
+              )}
+              {extras.length > 1 && (
+                <div style={{ marginTop: 6, fontSize: 11, color: '#8a8a8a', textAlign: 'center' }}>
+                  +{extras.length - 1}개 더 기다리고 있어요
+                </div>
+              )}
             </div>
           )}
           {stressAlert && !reminder && (
