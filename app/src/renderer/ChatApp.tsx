@@ -3,6 +3,7 @@
 // 약 등록은 LUI(대화)·GUI(폼) 두 경로 제공 + 소요시간 자동 계측 → LUI vs GUI 비교 테스트용
 // 공감 응답: 서버 /chat(Bedrock, 10/14 1차 연동) → 실패 시 core/empathy.ts 규칙 응답 폴백. 위기 키워드는 서버에 안 보냄. 약설명은 규칙 기반(core/drugData.ts)
 import { Fragment, useEffect, useRef, useState, type FormEvent } from 'react'
+import QRCode from 'qrcode' // 2차 PPG — HRV 측정 QR 생성(오프라인). npm i qrcode 필요
 import type { CatalogItem } from '../core/catalog'
 import type { DrugInfo } from '../core/drugData'
 import type { Pet } from '../core/types'
@@ -404,6 +405,7 @@ export default function ChatApp() {
   const nextId = useRef(Math.max(2, ...feeds.heart.map((m) => m.id), ...feeds.med.map((m) => m.id)) + 1)
   const feedRef = useRef<HTMLDivElement>(null)
   const alarmCardRef = useRef<HTMLDivElement>(null) // 설정 탭 '알람 간격' 카드 — '알람 당기기'가 여기로 스크롤
+  const qrCanvasRef = useRef<HTMLCanvasElement>(null) // HRV 측정 QR 캔버스(2차 PPG)
   const modeRef = useRef(mode)
   modeRef.current = mode
   const luiStartRef = useRef<number | null>(null)
@@ -518,6 +520,18 @@ export default function ChatApp() {
     window.petApi.debug('chat')
     setLocalHearts((h) => Math.min(10, Math.max(h, heartsToday) + 1))
   }
+  // 2차 PPG — HRV 측정 모달이 열리면 사용자별 QR 생성(회원번호·펫이름 자동 포함, 오프라인 동작)
+  useEffect(() => {
+    if (!hrvOpen) return
+    const canvas = qrCanvasRef.current
+    if (!canvas) return
+    const cpId = config.memberId ?? ''
+    const nm = pet?.name ?? '퐁이'
+    const url = `https://carepong-ppg-web.vercel.app/?user=${cpId}&pet=${encodeURIComponent(nm)}`
+    QRCode.toCanvas(canvas, url, { width: 150, margin: 1 }, (err) => {
+      if (err) console.error('QR 생성 실패', err)
+    })
+  }, [hrvOpen, config.memberId, pet?.name])
   const waterToday = intake.waterDayStart === startOfLocalDay(Date.now()) ? intake.waterCups : 0 // 오늘 마신 물(2#16)
   const lifetimeChats = pet?.lifetime.chats ?? 0 // = 누적 하트 (방꾸미기 진척)
   const moodDoneToday = !!diary[dayKeyOf(Date.now())]?.mood // 기분은 하루 1회만(5#38) — diary는 재실행에도 유지
@@ -1752,7 +1766,7 @@ export default function ChatApp() {
           <div className="mh__hrv-modal" role="dialog" aria-label="HRV 측정" onClick={(e) => e.stopPropagation()}>
             <button type="button" className="mh__wt-x" onClick={() => setHrvOpen(false)} aria-label="닫기">✕</button>
             {/* QR 자리 — 추후 실제 QR 삽입 */}
-            <div className="mh__hrv-qr" aria-label="QR 코드 자리" />
+            <canvas ref={qrCanvasRef} className="mh__hrv-qr" width={150} height={150} aria-label="HRV 측정 QR 코드" />
             <div className="mh__hrv-title">폰 카메라로 QR을 찍어주세요</div>
             <p className="mh__hrv-sub">손끝을 카메라에 1분간 · 끝나면<br />워크타입 네 번째 글자에 가까워져요</p>
             <div className="mh__hrv-count">측정 2/4회 · 하루 최대 2회</div>

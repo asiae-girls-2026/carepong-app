@@ -30,7 +30,8 @@
     "vitest": "^2.1.0"
   },
   "dependencies": {
-    "electron-store": "^11.0.2"
+    "electron-store": "^11.0.2",
+    "qrcode": "^1.5.4"
   },
   "productName": "CarePong",
   "description": "케어퐁 — 바탕화면 스트레스 케어 펫 (MVP)",
