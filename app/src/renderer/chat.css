@@ -920,3 +920,121 @@ body {
 .mh__feed--med .msg--pet { align-items: flex-start; gap: 6px; }
 /* 말풍선 가로로 넓게, 바깥선엔 안 닿게 */
 .mh__feed--med .msg__bubble { max-width: 82%; }
+
+/* ══ 📊 리포트 탭 — 오늘 > 이번 달 > 나 (기획서 CP-REP) ══════════════ */
+.mh__report { padding: 2px 2px 12px; display: flex; flex-direction: column; gap: 10px; }
+.mh__report > .mh__card { margin: 0; }
+/* 섹션 라벨 */
+.mh__rep-sec {
+  display: flex; align-items: baseline; gap: 6px;
+  margin: 6px 2px 0; font-size: 11px; font-weight: 800; color: var(--ink-soft);
+}
+.mh__rep-sec-r { margin-left: auto; font-weight: 700; color: #b7afc6; }
+.mh__rep-foot { margin: 6px 0 0; font-size: 10px; color: var(--ink-soft); line-height: 1.5; }
+.mh__up { color: var(--mint); font-weight: 900; }
+
+/* 2.1 히어로 */
+.mh__rep-hero { text-align: center; background: #fff; border-color: #ffe0c2; }
+.mh__hero-label { font-size: 11.5px; font-weight: 800; color: #b98a5a; }
+.mh__hero-pct { margin: 2px 0; color: var(--orange); line-height: 1; }
+.mh__hero-pct small { font-size: 15px; font-weight: 800; vertical-align: middle; }
+.mh__hero-pct b { font-size: 40px; font-weight: 900; }
+.mh__hero-pct span { font-size: 22px; font-weight: 900; }
+.mh__hero-base { font-size: 11px; font-weight: 700; color: #7a6a44; }
+.mh__hero-note { margin-top: 2px; font-size: 9.5px; color: #b7afc6; }
+.mh__hero-say {
+  display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px;
+  border-top: 1px dashed #f0d9a6; text-align: left;
+}
+.mh__hero-face { flex: none; width: 34px; height: 34px; object-fit: contain; image-rendering: pixelated; }
+.mh__hero-say p { margin: 0; font-size: 11.5px; color: #7a6a44; line-height: 1.5; }
+
+/* 2.2 업무리듬 */
+.mh__rhythm-goals {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  margin: 8px 0; padding: 7px 10px; background: #f6f9ff; border: 1.5px solid #dce7f7; border-radius: 10px;
+  font-size: 11px; color: var(--ink-soft);
+}
+.mh__rhythm-goals b { font-weight: 700; color: var(--ink); }
+.mh__rhythm-goals em { font-style: normal; font-weight: 900; color: #5a8fd6; }
+.mh__rhythm-chart { display: flex; gap: 4px; }
+.mh__rh-ylabels {
+  display: flex; flex-direction: column; justify-content: space-between;
+  width: 26px; padding: 2px 0; font-size: 8.5px; font-weight: 700; color: var(--ink-soft); text-align: right;
+}
+.mh__rh-ylabels span:first-child { color: #e08a7a; }
+.mh__rh-svg { flex: 1; height: 100px; border-radius: 8px; overflow: hidden; }
+.mh__rh-xaxis {
+  display: flex; justify-content: space-between; margin: 3px 0 0 30px;
+  font-size: 8.5px; color: var(--ink-soft);
+}
+
+/* 2.3 헬스케어 달력 */
+.mh__cal-badge {
+  margin: 6px 0 8px; padding: 6px 10px; text-align: center;
+  background: var(--mint-soft); border: 1.5px solid #bfe4d2; border-radius: 999px;
+  font-size: 11px; font-weight: 800; color: #3a7a5f;
+}
+.mh__cal-dot {
+  position: absolute; bottom: 3px; right: 3px; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--orange);
+}
+.mh__cal-dot--inline {
+  position: static; display: inline-block; vertical-align: middle; margin: 0 1px;
+}
+.mh__cal-todaytag {
+  position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%);
+  font-size: 7px; font-weight: 800; color: var(--orange);
+}
+
+/* 2.4 업무유형 테스트 */
+.mh__rep-type { text-align: center; background: #fff; border-color: #ffd9e0; }
+.mh__type-pill {
+  display: inline-block; margin: 0 auto 8px; padding: 4px 12px;
+  background: #ffe1e8; border-radius: 999px; font-size: 11px; font-weight: 800; color: #d06a86;
+}
+.mh__type-q {
+  width: 44px; height: 44px; margin: 2px auto; display: grid; place-items: center;
+  font-size: 28px; font-weight: 900; color: #e89bb0;
+}
+.mh__type-title { font-size: 15px; font-weight: 900; color: #6b5c3e; }
+.mh__type-sub { margin: 3px 0 0; font-size: 10.5px; color: var(--ink-soft); }
+.mh__type-code { display: flex; justify-content: center; gap: 8px; margin: 10px 0 2px; }
+.mh__type-letter {
+  width: 30px; height: 30px; display: grid; place-items: center;
+  background: #fff; border: 1.5px solid #f0c6d2; border-radius: 8px;
+  font-size: 15px; font-weight: 900; color: #d06a86; cursor: default;
+}
+.mh__type-hint { margin: 0 0 10px; font-size: 9.5px; color: #b7afc6; }
+.mh__type-start {
+  width: 100%; padding: 10px; border: none; border-radius: 10px;
+  background: linear-gradient(90deg, #ff9a7a, #ff7a95); color: #fff;
+  font-size: 12.5px; font-weight: 800; cursor: pointer;
+}
+.mh__type-start:hover { filter: brightness(1.04); }
+.mh__type-unlock {
+  list-style: none; margin: 10px 0 0; padding: 0; text-align: left;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.mh__type-unlock li {
+  display: flex; align-items: center; gap: 7px; padding: 7px 10px;
+  background: #fff6ee; border: 1.5px solid #f3ddcb; border-radius: 9px;
+  font-size: 10.5px; color: #7a6a44;
+}
+.mh__type-unlock li b {
+  flex: none; width: 18px; height: 18px; display: grid; place-items: center;
+  background: #ffd98e; border-radius: 50%; font-size: 10px; font-weight: 900; color: #8a6a2a;
+}
+
+/* 2.5 퐁이 제안 */
+.mh__rep-tip { background: #fff4f2; border: 1.5px dashed #f3b8ac; }
+.mh__rep-tip p { margin: 0; font-size: 11.5px; color: #8a5a50; line-height: 1.55; }
+.mh__tip-actions { display: flex; gap: 8px; margin-top: 10px; }
+.mh__tip-go {
+  flex: 1; padding: 8px; border: none; border-radius: 9px;
+  background: var(--orange); color: #fff; font-size: 11.5px; font-weight: 800; cursor: pointer;
+}
+.mh__tip-no {
+  flex: none; padding: 8px 14px; border: 1.5px solid #e4b8ae; border-radius: 9px;
+  background: #fff; color: #a8776d; font-size: 11.5px; font-weight: 700; cursor: pointer;
+}

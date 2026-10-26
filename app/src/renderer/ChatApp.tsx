@@ -1168,12 +1168,113 @@ export default function ChatApp() {
                 </form>
               </>
             ) : mode === 'report' ? (
-              /* ── 📊 리포트 — 준비 중(플레이스홀더). 2차 배포 때 UI·데이터 연결 ── */
-              <div className="mh__settings">
-                <div className="mh__card mh__soon">
-                  <div className="mh__soon-emoji" aria-hidden>📊</div>
-                  <div className="mh__soon-title">리포트는 준비 중이에요</div>
-                  <p className="mh__soon-sub">곧 나의 스트레스·돌봄 기록을 한눈에 볼 수 있어요.</p>
+              /* ── 📊 리포트 — 흩어진 기록 모아보기 · 오늘 > 이번 달 > 나 (기획서 CP-REP, UI 껍데기·더미값) ── */
+              <div className="mh__settings mh__report">
+                {/* ═══ 오늘 ═══ */}
+                <div className="mh__rep-sec">오늘</div>
+
+                {/* 2.1 히어로 — 오늘 업무 스트레스 백분위 + 3단 밴드 + 퐁이 제안 */}
+                <div className="mh__card mh__rep-hero">
+                  <div className="mh__hero-label">오늘 업무 스트레스</div>
+                  <div className="mh__hero-pct"><small>상위</small> <b>34</b><span>%</span></div>
+                  <div className="mh__hero-base">내 최근 4주 대비</div>
+                  <div className="mh__hero-note">의학적 지표가 아니에요</div>
+                  <div className="mh__hero-say">
+                    {petImg && <img className="mh__hero-face" src={petImg} alt="" aria-hidden draggable={false} />}
+                    <p>“집사님, 오늘은 최근 4주 중 상위 34%로 조금 바빴어요. 그래도 잘 버티셨어요!”</p>
+                  </div>
+                </div>
+
+                {/* 2.2 업무리듬 — 목표 4종 1줄 + 하루 리듬 그래프(3단 밴드) */}
+                <div className="mh__card mh__rep-rhythm">
+                  <div className="mh__card-head">업무리듬<span className="mh__card-sub">08:30 – 18:30</span></div>
+                  <div className="mh__rhythm-goals">
+                    <span>오늘 목표</span>
+                    <b>💊 <em>2/3</em></b>
+                    <b>💧 <em>6/8</em></b>
+                    <b>🌙 <em>5회</em></b>
+                    <b>🫧 <em>4회</em></b>
+                  </div>
+                  <div className="mh__rhythm-chart">
+                    <div className="mh__rh-ylabels"><span>힘듦</span><span>보통</span><span>여유</span></div>
+                    <svg className="mh__rh-svg" viewBox="0 0 300 120" preserveAspectRatio="none" aria-hidden>
+                      <rect x="0" y="0" width="300" height="40" fill="#ffe7e0" />
+                      <rect x="0" y="40" width="300" height="40" fill="#fff3d8" />
+                      <rect x="0" y="80" width="300" height="40" fill="#e3f4ea" />
+                      <polyline
+                        points="10,95 55,60 95,30 130,70 170,88 210,35 250,55 290,92"
+                        fill="none" stroke="#5a8fd6" strokeWidth="3"
+                        strokeLinecap="round" strokeLinejoin="round"
+                      />
+                      {[['10','95'],['55','60'],['95','30'],['130','70'],['170','88'],['210','35'],['250','55'],['290','92']].map(([x,y],i)=>(
+                        <circle key={i} cx={x} cy={y} r="3.5" fill="#5a8fd6" />
+                      ))}
+                    </svg>
+                  </div>
+                  <div className="mh__rh-xaxis"><span>08:30</span><span>12:00</span><span>15:00</span><span>18:30</span></div>
+                  <p className="mh__rep-foot">🌿 완화한 시점 · 점수 숫자는 보여주지 않아요 (3단계만)</p>
+                </div>
+
+                {/* ═══ 이번 달 ═══ */}
+                <div className="mh__rep-sec">이번 달<span className="mh__rep-sec-r">10월</span></div>
+
+                {/* 2.3 헬스케어 달력 — 기분 이모지 + 복약 점 + 연속 배지 + 주간 완화 요약 */}
+                <div className="mh__card mh__rep-cal">
+                  <div className="mh__card-head">헬스케어 달력<span className="mh__card-sub">10월</span></div>
+                  <div className="mh__cal-badge">💊 연속 5일째 복약 성공 중! · 이번 달 90%</div>
+                  <div className="mh__cal">
+                    {['일','월','화','수','목','금','토'].map((w)=>(<span key={w} className="mh__cal-wd">{w}</span>))}
+                    {Array.from({ length: new Date(2026, 9, 1).getDay() }, (_, i) => (
+                      <span key={`b${i}`} className="mh__cal-cell mh__cal-cell--empty" />
+                    ))}
+                    {Array.from({ length: 31 }, (_, i) => {
+                      const day = i + 1
+                      // 더미: 기분 이모지·복약 점을 샘플로 흩뿌림(데이터는 추후 연결)
+                      const face = ['😄','😊','😐','😟','😣']
+                      const hasMood = day % 2 === 1 && day <= 26
+                      const med = day % 3 !== 0 && day <= 26
+                      const isToday = day === 26
+                      return (
+                        <span key={day} className={`mh__cal-cell${isToday ? ' mh__cal-cell--today' : ''}${hasMood ? ' mh__cal-cell--has' : ''}`}>
+                          <em>{day}</em>
+                          {hasMood && <span className="mh__cal-mood">{face[day % 5]}</span>}
+                          {med && <i className="mh__cal-dot" aria-hidden />}
+                          {isToday && <span className="mh__cal-todaytag">오늘</span>}
+                        </span>
+                      )
+                    })}
+                  </div>
+                  <p className="mh__rep-foot">이모지 = 그날 기분 · <i className="mh__cal-dot mh__cal-dot--inline" /> = 복약 다 챙긴 날</p>
+                  <p className="mh__rep-foot">이번 주 완화: 🫧 3회 · 🌙 2회 · 💧 수분 4/6 · 심호흡 후 회복 반응 <b className="mh__up">+12%</b></p>
+                </div>
+
+                {/* ═══ 나 ═══ */}
+                <div className="mh__rep-sec">나</div>
+
+                {/* 2.4 업무유형 테스트 — 4글자 유형, 축별 해금 조건·사유 */}
+                <div className="mh__card mh__rep-type">
+                  <div className="mh__type-pill">🧭 업무유형 테스트</div>
+                  <div className="mh__type-q" aria-hidden>?</div>
+                  <div className="mh__type-title">나는 어떤 동물일까?</div>
+                  <p className="mh__type-sub">설문 1분 × 키보드 리듬 × HRV로 찾는 내 업무 유형</p>
+                  <div className="mh__type-code">
+                    {['?','?','?','?'].map((c,i)=>(<span key={i} className="mh__type-letter">{c}</span>))}
+                  </div>
+                  <p className="mh__type-hint">글자에 마우스를 올리면 뜻이 보여요</p>
+                  <button type="button" className="mh__type-start">📋 1분 설문으로 시작하기</button>
+                  <ul className="mh__type-unlock">
+                    <li><b>2</b> 부하 패턴 (S/F) · 키보드 리듬 5일 이상 관찰 · 진행 3/5일</li>
+                    <li><b>4</b> 회복 여유 (R/G) · 1분 측정 4회 이상 · 진행 2/4회</li>
+                  </ul>
+                </div>
+
+                {/* 2.5 퐁이 제안 — 패턴 기반 제안 + 실행 버튼 */}
+                <div className="mh__card mh__rep-tip">
+                  <p>🦊 퐁이 제안 · “요즘 수요일 오후 3시쯤 자주 바빠지시는 것 같아요. 그 시간 전에 미리 스트레스 알람을 당겨둘까요?”</p>
+                  <div className="mh__tip-actions">
+                    <button type="button" className="mh__tip-go">알람 당기기</button>
+                    <button type="button" className="mh__tip-no">닫기</button>
+                  </div>
                 </div>
               </div>
             ) : mode === 'home' ? null : (
