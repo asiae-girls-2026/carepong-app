@@ -1369,8 +1369,9 @@ export default function ChatApp() {
                   <div className="mh__card-head">업무리듬<span className="mh__card-sub">08:30 – 18:30</span></div>
                   <div className="mh__rhythm-goals">
                     <span>오늘 목표</span>
-                    <b>💊 <em>2/3</em></b>
-                    <b>💧 <em>6/8</em></b>
+                    {/* 💊 복약·💧 물 = 사용자 실데이터 연동 / 🌙·🫧 = 오늘 횟수 로직 연결 후(내일) */}
+                    <b>💊 <em>{config.medications.filter((m) => takenToday(m.id)).length}/{config.medications.length}</em></b>
+                    <b>💧 <em>{waterToday}/{config.water.dailyTargetCups}</em></b>
                     <b>🌙 <em>5회</em></b>
                     <b>🫧 <em>4회</em></b>
                   </div>
