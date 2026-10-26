@@ -1586,7 +1586,7 @@ export default function ChatApp() {
 
                 {/* 2.5 퐁이 제안 — 패턴 기반 제안 + 실행 버튼 */}
                 <div className="mh__card mh__rep-tip">
-                  <p>🦊 퐁이 제안 · “요즘 수요일 오후 3시쯤 자주 바빠지시는 것 같아요. 그 시간 전에 미리 스트레스 알람을 당겨둘까요?”</p>
+                  <p>🦊 {petName} 제안 · “요즘 수요일 오후 3시쯤 자주 바빠지시는 것 같아요. 그 시간 전에 미리 스트레스 알람을 당겨둘까요?”</p>
                   <div className="mh__tip-actions">
                     <button type="button" className="mh__tip-go" onClick={goAlarmSettings}>알람 당기기</button>
                     <button type="button" className="mh__tip-no">닫기</button>
