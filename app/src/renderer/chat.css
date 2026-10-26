@@ -749,27 +749,30 @@ body {
 
 /* ══ [1단계] 상단 가로 탭 (마이룸·약지도·마음관리·리포트·설정) ══ */
 .mh__toptabs {
-  flex: none; display: flex; gap: 4px;
-  margin: 0 6px -8px; padding: 0 2px;    /* 아래로 -8px → 프레임에 살짝 걸침(탭 하단이 프레임 뒤로 들어감) */
-  position: relative; z-index: 0;         /* 탭을 프레임보다 뒤로 → 콘텐츠를 가리지 않음 */
+  flex: none; display: flex; gap: 2px;
+  margin: 0 0 8px; padding: 0 0 8px;      /* 걸침 없음. 탭 줄 아래 구분선 */
+  border-bottom: 1.5px solid #ece2cf;
+  position: relative; z-index: 1;
 }
+/* 미선택 탭 — 박스(테두리·배경) 없이 아이콘+텍스트만(기획서) */
 .mh__toptab {
   flex: 1; min-width: 0;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 7px 2px 6px;
-  border: 2px solid #d8cdb6; border-radius: 12px;
-  background: #f3ecdc; color: #8a8066;
+  border: none; border-radius: 12px;
+  background: none; color: #a89c82;
   font-family: inherit; cursor: pointer;
-  transition: transform 0.1s ease, background 0.12s ease;
+  transition: background 0.12s ease, color 0.12s ease;
 }
-.mh__toptab:hover { background: #fbf6e9; }
+.mh__toptab:hover { background: #f6efdf; color: #8a8066; }
 .mh__toptab-ico { font-size: 16px; line-height: 1; }
 .mh__toptab-txt { font-size: 10.5px; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; }
-/* 선택 탭 — 기획서 톤(파란색) */
+/* 선택 탭만 파란 라운드 박스(기획서) */
 .mh__toptab.on {
-  background: #5a8fd6; border-color: #4578bd; color: #fff;
-  box-shadow: 0 2px 0 #3f6aa8;
+  background: #5a8fd6; color: #fff;
+  box-shadow: 0 2px 6px rgba(90, 143, 214, 0.35);
 }
+.mh__toptab.on:hover { background: #5a8fd6; color: #fff; }
 
 /* [1단계] 준비 중 플레이스홀더 (리포트 등) */
 .mh__soon {
@@ -1190,8 +1193,9 @@ body {
 /* 패널 안에서는 개별 박스들의 바깥 여백을 패널 패딩이 대신 → 사이 배경이 안 보이게 */
 .mh__panel .mh__petbar { margin: 0 0 8px; }
 .mh__panel .mh__updatebar { margin: 0 0 8px; }
-.mh__panel .mh__toptabs { margin: 0 0 -8px; }
+.mh__panel .mh__toptabs { margin: 0 0 8px; }
 /* 패널이 큰 테두리를 가지므로 프레임 자체 테두리는 연하게(이중 테두리 방지), 배경만 유지 */
-.mh__panel .mh__frame { border-color: #e8ddc6; }
+/* 패널이 큰 박스이므로 프레임 자체 테두리는 제거(이중 테두리·걸침 없이 구분선만) */
+.mh__panel .mh__frame { border: none; border-radius: 0; padding: 0; background: transparent; }
 /* 공략집 오버레이는 패널 기준으로 전체를 덮게(패널 안쪽에 맞춤) */
 .mh__panel .mh__guide { inset: 0; border-radius: 14px; }
