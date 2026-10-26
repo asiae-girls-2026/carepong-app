@@ -1378,36 +1378,59 @@ export default function ChatApp() {
                 </div>
 
                 {/* ═══ 이번 달 ═══ */}
-                <div className="mh__rep-sec">이번 달<span className="mh__rep-sec-r">10월</span></div>
+                <div className="mh__rep-sec">이번 달<span className="mh__rep-sec-r">{new Date().getMonth() + 1}월</span></div>
 
-                {/* 2.3 헬스케어 달력 — 기분 이모지 + 복약 점 + 연속 배지 + 주간 완화 요약 */}
+                {/* 2.3 헬스케어 달력 — 기분 이모지(diary 실데이터) + 복약 점(오늘만, 과거 기록은 복약 로직 연결 후) */}
                 <div className="mh__card mh__rep-cal">
-                  <div className="mh__card-head">헬스케어 달력<span className="mh__card-sub">10월</span></div>
-                  <div className="mh__cal-badge">💊 연속 5일째 복약 성공 중! · 이번 달 90%</div>
-                  <div className="mh__cal">
-                    {['일','월','화','수','목','금','토'].map((w)=>(<span key={w} className="mh__cal-wd">{w}</span>))}
-                    {Array.from({ length: new Date(2026, 9, 1).getDay() }, (_, i) => (
-                      <span key={`b${i}`} className="mh__cal-cell mh__cal-cell--empty" />
-                    ))}
-                    {Array.from({ length: 31 }, (_, i) => {
-                      const day = i + 1
-                      // 더미: 기분 이모지·복약 점을 샘플로 흩뿌림(데이터는 추후 연결)
-                      const face = ['😄','😊','😐','😟','😣']
-                      const hasMood = day % 2 === 1 && day <= 26
-                      const med = day % 3 !== 0 && day <= 26
-                      const isToday = day === 26
-                      return (
-                        <span key={day} className={`mh__cal-cell${isToday ? ' mh__cal-cell--today' : ''}${hasMood ? ' mh__cal-cell--has' : ''}`}>
-                          <em>{day}</em>
-                          {hasMood && <span className="mh__cal-mood">{face[day % 5]}</span>}
-                          {med && <i className="mh__cal-dot" aria-hidden />}
-                          {isToday && <span className="mh__cal-todaytag">오늘</span>}
-                        </span>
-                      )
-                    })}
-                  </div>
-                  <p className="mh__rep-foot">이모지 = 그날 기분 · <i className="mh__cal-dot mh__cal-dot--inline" /> = 복약 다 챙긴 날</p>
-                  <p className="mh__rep-foot">이번 주 완화: 🫧 3회 · 🌙 2회 · 💧 수분 4/6 · 심호흡 후 회복 반응 <b className="mh__up">+12%</b></p>
+                  <div className="mh__card-head">헬스케어 달력<span className="mh__card-sub">{new Date().getMonth() + 1}월</span></div>
+                  {(() => {
+                    const now = new Date()
+                    const y = now.getFullYear()
+                    const mo = now.getMonth()
+                    const todayNum = now.getDate()
+                    const firstDow = new Date(y, mo, 1).getDay()
+                    const daysInMonth = new Date(y, mo + 1, 0).getDate()
+                    // 이번 달 내가 기분을 남긴 날 수(diary 실데이터)
+                    const moodDays = Array.from({ length: daysInMonth }, (_, i) => {
+                      const k = `${y}-${String(mo + 1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`
+                      return diary[k]?.mood ? 1 : 0
+                    }).reduce((a: number, b: number) => a + b, 0)
+                    // 오늘 복약 전부 완료 여부(실데이터) — 과거 날짜별 기록은 복약 로직 연결 후
+                    const medDoneToday =
+                      config.medications.length > 0 && config.medications.every((m) => takenToday(m.id))
+                    return (
+                      <>
+                        <div className="mh__cal-badge">
+                          {moodDays > 0 ? `🖊 이번 달 ${moodDays}일 기분을 기록했어요` : '🖊 기분을 기록하면 달력에 쌓여요'}
+                        </div>
+                        <div className="mh__cal">
+                          {['일', '월', '화', '수', '목', '금', '토'].map((w) => (
+                            <span key={w} className="mh__cal-wd">{w}</span>
+                          ))}
+                          {Array.from({ length: firstDow }, (_, i) => (
+                            <span key={`b${i}`} className="mh__cal-cell mh__cal-cell--empty" />
+                          ))}
+                          {Array.from({ length: daysInMonth }, (_, i) => {
+                            const day = i + 1
+                            const key = `${y}-${String(mo + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                            const mood = diary[key]?.mood
+                            const isToday = day === todayNum
+                            const medDot = isToday && medDoneToday // 오늘만 실데이터(과거 복약기록은 추후)
+                            return (
+                              <span key={day} className={`mh__cal-cell${isToday ? ' mh__cal-cell--today' : ''}${mood ? ' mh__cal-cell--has' : ''}`}>
+                                <em>{day}</em>
+                                {mood && <span className="mh__cal-mood">{mood}</span>}
+                                {medDot && <i className="mh__cal-dot" aria-hidden />}
+                                {isToday && <span className="mh__cal-todaytag">오늘</span>}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      </>
+                    )
+                  })()}
+                  <p className="mh__rep-foot">이모지 = 그날 고른 기분 · <i className="mh__cal-dot mh__cal-dot--inline" /> = 복약 다 챙긴 날</p>
+                  <p className="mh__rep-foot mh__rep-foot--soon">연속 복약·주간 완화 요약은 복약 기록이 연결되면 채워져요</p>
                 </div>
 
                 {/* ═══ 나 ═══ */}

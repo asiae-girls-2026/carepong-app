@@ -1172,3 +1172,6 @@ body {
 .mh__cand--inmsg { margin-top: 8px; max-height: 220px; }
 .mh__cand--inmsg button { background: #fffdf6; border-color: #ead9b8; }
 .mh__cand--inmsg button:hover { background: #fff3dd; border-color: #d9c097; }
+
+/* 데이터 연결 예정 안내 */
+.mh__rep-foot--soon { color: #b7afc6; font-style: italic; }
