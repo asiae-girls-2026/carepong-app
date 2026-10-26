@@ -743,7 +743,7 @@ export default function ChatApp() {
     const thinkingId = push({ role: 'pet', text: '', thinking: true })
     const started = Date.now()
     if (mode === 'med') {
-      if (earnsHeart(text)) sendChatPing() // 약 탭 대화도 기존대로 하트 적립(난타만 거름)
+      // 하트 적립은 '마음관리' 채팅에서만 — 약지도 대화는 하트 적립 대상 아님(기획 반영)
       handleMedMessage(text, thinkingId, started)
     } else {
       recordDiary({ note: text }) // 마음 일기장에 남김
