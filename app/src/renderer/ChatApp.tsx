@@ -86,6 +86,63 @@ const WELCOME: Record<'med' | 'heart', string> = {
 }
 // 약지도 퀵리플라이 칩(명세서 2.4) — 누르면 그 문장이 즉시 전송된다(2.3).
 const MED_QUICK_CHIPS = ['유산균 아침 등록', '타이레놀 하루 몇 번?', '오늘 약 보여줘']
+
+// ── 업무유형 테스트 설문(업무유형 엑셀 ver.0.5 · 시트4) ───────────────
+// 1분 4문항 · 선택지 2개 단일선택. Q1·Q2→축1(L/O), Q3·Q4→축3(A/I).
+// 같은 축 2문항 다수결, 1:1이면 앞 문항 우선. 설문은 1·3번째 글자만 즉시 공개(2·4번째는 리듬·HRV 해금).
+type WtLetter = 'L' | 'O' | 'A' | 'I'
+interface WtQuestion {
+  axis: '집중 시간대' | '쉼 스타일'
+  q: string
+  options: { label: string; letter: WtLetter }[]
+}
+const WT_QUESTIONS: WtQuestion[] = [
+  {
+    axis: '집중 시간대',
+    q: '하루 중 머리가 제일 잘 돌아가는 때는?',
+    options: [
+      { label: '🌅 오전 · 아침에 몰아서 하는 편', letter: 'L' },
+      { label: '🌙 오후·저녁 · 엔진이 늦게 걸리는 편', letter: 'O' },
+    ],
+  },
+  {
+    axis: '집중 시간대',
+    q: '중요한 일을 직접 고른다면 언제 하나요?',
+    options: [
+      { label: '출근 직후, 머리 맑을 때 바로', letter: 'L' },
+      { label: '점심 지나고 리듬을 탔을 때', letter: 'O' },
+    ],
+  },
+  {
+    axis: '쉼 스타일',
+    q: '‘잠깐 쉬어요’ 알림이 오면?',
+    options: [
+      { label: '🙆 바로 일어나서 쉬는 편', letter: 'A' },
+      { label: '🔥 하던 것만 끝내고… 결국 못 쉬는 편', letter: 'I' },
+    ],
+  },
+  {
+    axis: '쉼 스타일',
+    q: '일이 잘 풀리는 중에 휴식 시간이 되면?',
+    options: [
+      { label: '그래도 끊고 쉼 · 길게 가려면 쉬어야죠', letter: 'A' },
+      { label: '흐름 깨기 싫어서 계속 달림', letter: 'I' },
+    ],
+  },
+]
+// 글자별 마우스오버 툴팁(시트2 뜻)
+const WT_LETTER_DESC: Record<string, string> = {
+  L: 'Lark · 오전 집중형 — 아침에 머리가 제일 잘 돌아가요',
+  O: 'Owl · 오후·저녁 집중형 — 엔진이 늦게 걸려요',
+  S: 'Sprinter · 짧고 굵게 몰아치는 부하 패턴',
+  F: 'Flow · 고르게 꾸준한 부하 패턴',
+  A: 'Active rest · 쉬라고 하면 바로 쉬는 스타일',
+  I: 'Immersive · 하던 일을 끝내야 쉬는 스타일',
+  R: 'Rebounder · 스트레스 후 빨리 튕겨 돌아오는 회복',
+  G: 'Gradual charger · 푹 쉬어야 천천히 차오르는 회복',
+}
+// 다수결(1:1이면 앞 문항 우선) — 축1: [Q1,Q2], 축3: [Q3,Q4]. 2문항이라 같으면 그 값, 다르면 앞 우선.
+const wtDecide = (first: WtLetter, second: WtLetter): WtLetter => (first === second ? first : first)
 const MED_ENTRY_ACTIONS: { label: string; action: QuickAction }[] = [
   { label: '💊 약 등록', action: 'reg' },
   { label: '🔍 약 물어보기', action: 'ask' },
@@ -325,6 +382,9 @@ export default function ChatApp() {
   const [showAddForm, setShowAddForm] = useState(false) // 약 1개 이상일 때: '➕ 약 추가' 눌러야 입력 폼이 펼쳐짐(PM 요청)
   const [confirmDelId, setConfirmDelId] = useState<string | null>(null) // 약 삭제 인앱 2단계 확인(비차단)
   const [copied, setCopied] = useState(false) // 회원번호 복사 얼럿
+  // 업무유형 테스트 설문 모달 — step: 0~3 문항, 'result' 결과(첫 두 글자). answers 는 각 문항 선택 글자.
+  const [wtStep, setWtStep] = useState<number | 'result' | null>(null) // null=닫힘
+  const [wtAnswers, setWtAnswers] = useState<WtLetter[]>([])
   const [version, setVersion] = useState('') // 현재 설치 버전 (설정 하단 표시)
   const [update, setUpdate] = useState<UpdateInfo | null>(null) // 최신 릴리스 비교 결과
   const [checkingUpdate, setCheckingUpdate] = useState(false)
@@ -703,6 +763,19 @@ export default function ChatApp() {
       push({ role: 'pet', text: '무엇을 도와드릴까요?', actions: MED_ENTRY_ACTIONS })
     }
   }
+
+  // ── 업무유형 테스트 설문 ──
+  const wtStart = (): void => { setWtAnswers([]); setWtStep(0) } // 시작·재설문
+  const wtClose = (): void => setWtStep(null)
+  const wtPick = (letter: WtLetter): void => {
+    const next = [...wtAnswers, letter]
+    setWtAnswers(next)
+    if (typeof wtStep === 'number' && wtStep < WT_QUESTIONS.length - 1) setWtStep(wtStep + 1)
+    else setWtStep('result')
+  }
+  // 결과 첫 두 글자 — 축1(Q1,Q2 다수결)·축3(Q3,Q4 다수결). 2·4번째는 리듬·HRV 해금 전이라 '?'
+  const wtAxis1: WtLetter | null = wtAnswers.length >= 2 ? wtDecide(wtAnswers[0], wtAnswers[1]) : null
+  const wtAxis3: WtLetter | null = wtAnswers.length >= 4 ? wtDecide(wtAnswers[2], wtAnswers[3]) : null
 
   const submitGui = (formMsgId: number): void => {
     if (!gName.trim()) return
@@ -1258,10 +1331,23 @@ export default function ChatApp() {
                   <div className="mh__type-title">나는 어떤 동물일까?</div>
                   <p className="mh__type-sub">설문 1분 × 키보드 리듬 × HRV로 찾는 내 업무 유형</p>
                   <div className="mh__type-code">
-                    {['?','?','?','?'].map((c,i)=>(<span key={i} className="mh__type-letter">{c}</span>))}
+                    {[wtAxis1, '?', wtAxis3, '?'].map((c, i) => {
+                      const ch = c ?? '?'
+                      return (
+                        <span
+                          key={i}
+                          className={`mh__type-letter${ch !== '?' ? ' on' : ''}`}
+                          title={ch !== '?' ? WT_LETTER_DESC[ch] : i === 1 ? '부하 패턴(S/F) · 키보드 리듬 5일 이상 관찰 후 공개' : i === 3 ? '회복 탄력(R/G) · HRV 1분 측정 4회 이상 후 공개' : undefined}
+                        >
+                          {ch}
+                        </span>
+                      )
+                    })}
                   </div>
                   <p className="mh__type-hint">글자에 마우스를 올리면 뜻이 보여요</p>
-                  <button type="button" className="mh__type-start">📋 1분 설문으로 시작하기</button>
+                  <button type="button" className="mh__type-start" onClick={wtStart}>
+                    {wtAxis1 ? '🔁 설문 다시 하기' : '📋 1분 설문으로 시작하기'}
+                  </button>
                   <ul className="mh__type-unlock">
                     <li><b>2</b> 부하 패턴 (S/F) · 키보드 리듬 5일 이상 관찰 · 진행 3/5일</li>
                     <li><b>4</b> 회복 여유 (R/G) · 1분 측정 4회 이상 · 진행 2/4회</li>
@@ -1567,6 +1653,50 @@ export default function ChatApp() {
           {/* (우측 세로 책갈피 → 상단 가로 탭으로 이동. 아래 mh__toptabs 참조) */}
         </div>
       </div>
+
+      {/* ── 업무유형 테스트 설문 모달(엑셀 ver.0.5) ── */}
+      {wtStep !== null && (
+        <div className="mh__wt-dim" onClick={wtClose}>
+          <div className="mh__wt-modal" role="dialog" aria-label="업무유형 테스트" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="mh__wt-x" onClick={wtClose} aria-label="닫기">✕</button>
+            {typeof wtStep === 'number' ? (
+              <>
+                <div className="mh__wt-top">업무유형 테스트 · {wtStep + 1} / {WT_QUESTIONS.length}</div>
+                <div className="mh__wt-axis">{WT_QUESTIONS[wtStep].axis}</div>
+                <p className="mh__wt-q">{WT_QUESTIONS[wtStep].q}</p>
+                <div className="mh__wt-opts">
+                  {WT_QUESTIONS[wtStep].options.map((o) => (
+                    <button key={o.letter} type="button" className="mh__wt-opt" onClick={() => wtPick(o.letter)}>
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mh__wt-top">업무유형 테스트 · 결과</div>
+                <div className="mh__wt-result-title">첫 두 글자가 나왔어요!</div>
+                <div className="mh__type-code mh__wt-code">
+                  {[wtAxis1, '?', wtAxis3, '?'].map((c, i) => {
+                    const ch = c ?? '?'
+                    return (
+                      <span key={i} className={`mh__type-letter${ch !== '?' ? ' on' : ''}`} title={ch !== '?' ? WT_LETTER_DESC[ch] : undefined}>
+                        {ch}
+                      </span>
+                    )
+                  })}
+                </div>
+                <ul className="mh__wt-unlock">
+                  <li><b>2번째 글자</b>는 키보드 리듬을 5일 지켜봐야 해요 · 느낌과 실제 패턴이 자주 다르거든요</li>
+                  <li><b>4번째 글자</b>는 1분 측정 4회 · 여러 날 평균이어야 내 기준선이 생겨요</li>
+                </ul>
+                <button type="button" className="mh__wt-done" onClick={wtClose}>결과 카드 보기</button>
+                <button type="button" className="mh__wt-retry" onClick={wtStart}>설문 다시 하기</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

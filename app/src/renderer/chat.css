@@ -26,7 +26,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.mh { display: flex; flex-direction: column; height: 100%; padding: 8px 10px 10px; }
+.mh { display: flex; flex-direction: column; height: 100%; padding: 8px 10px 10px; position: relative; }
 
 /* ── 상단 바: "OO의 미니홈" + TODAY ── */
 .mh__bar {
@@ -1037,4 +1037,60 @@ body {
 .mh__tip-no {
   flex: none; padding: 8px 14px; border: 1.5px solid #e4b8ae; border-radius: 9px;
   background: #fff; color: #a8776d; font-size: 11.5px; font-weight: 700; cursor: pointer;
+}
+
+/* ══ 업무유형 테스트 설문 모달 ════════════════════════════════════ */
+.mh__wt-dim {
+  position: absolute; inset: 0; z-index: 50;
+  display: grid; place-items: center; padding: 20px;
+  background: rgba(60, 54, 84, 0.28);
+}
+.mh__wt-modal {
+  position: relative; width: 100%; max-width: 300px;
+  background: #fff; border-radius: 18px; padding: 20px 18px 16px;
+  box-shadow: 0 12px 30px rgba(60, 54, 84, 0.25);
+  text-align: center;
+}
+.mh__wt-x {
+  position: absolute; top: 10px; right: 12px; border: none; background: none;
+  font-size: 14px; color: #c3bbcf; cursor: pointer;
+}
+.mh__wt-top { font-size: 11px; font-weight: 700; color: var(--ink-soft); }
+.mh__wt-axis {
+  display: inline-block; margin: 8px auto 10px; padding: 3px 11px;
+  background: #ffe1e8; border-radius: 999px; font-size: 10.5px; font-weight: 800; color: #d06a86;
+}
+.mh__wt-q { margin: 0 0 14px; font-size: 14px; font-weight: 900; color: #5b5375; line-height: 1.45; }
+.mh__wt-opts { display: flex; flex-direction: column; gap: 9px; }
+.mh__wt-opt {
+  padding: 13px 14px; text-align: left;
+  background: #fff8ee; border: 1.5px solid #f0e2cc; border-radius: 12px;
+  font-size: 12px; font-weight: 700; color: #6b5c3e; cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.mh__wt-opt:hover { background: #fff1d8; border-color: #e8c99a; }
+.mh__wt-opt:active { background: #ffe9c4; }
+
+/* 결과 */
+.mh__wt-result-title { margin: 10px 0 12px; font-size: 14px; font-weight: 900; color: #5b5375; }
+.mh__wt-code { justify-content: center; margin: 0 0 14px; }
+.mh__type-letter.on { background: #eef3ff; border-color: #bcd0f0; color: #5a8fd6; }
+.mh__wt-unlock {
+  list-style: none; margin: 0 0 14px; padding: 0; text-align: left;
+  display: flex; flex-direction: column; gap: 7px;
+}
+.mh__wt-unlock li {
+  padding: 9px 11px; background: #fff8ee; border: 1.5px solid #f3e4cf; border-radius: 10px;
+  font-size: 10.5px; color: #7a6a44; line-height: 1.5;
+}
+.mh__wt-unlock li b { color: #d98a1f; }
+.mh__wt-done {
+  width: 100%; padding: 11px; margin-bottom: 8px; border: none; border-radius: 11px;
+  background: linear-gradient(90deg, #ff9a7a, #ff7a95); color: #fff;
+  font-size: 12.5px; font-weight: 800; cursor: pointer;
+}
+.mh__wt-done:hover { filter: brightness(1.04); }
+.mh__wt-retry {
+  border: none; background: none; font-size: 11px; font-weight: 700;
+  color: var(--ink-soft); text-decoration: underline; cursor: pointer;
 }
