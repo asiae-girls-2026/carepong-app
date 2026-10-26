@@ -401,6 +401,7 @@ export default function ChatApp() {
   // 복원된 대화의 id 와 겹치지 않게 다음 id 를 가장 큰 id+1 로 시작(복원 없으면 3)
   const nextId = useRef(Math.max(2, ...feeds.heart.map((m) => m.id), ...feeds.med.map((m) => m.id)) + 1)
   const feedRef = useRef<HTMLDivElement>(null)
+  const alarmCardRef = useRef<HTMLDivElement>(null) // 설정 탭 '알람 간격' 카드 — '알람 당기기'가 여기로 스크롤
   const modeRef = useRef(mode)
   modeRef.current = mode
   const luiStartRef = useRef<number | null>(null)
@@ -783,6 +784,15 @@ export default function ChatApp() {
     else setWtStep('result')
   }
   const wtSeeCard = (): void => { setWtDone(true); setWtStep(null) } // '결과 카드 보기' — 리포트 카드가 과 공개 상태로
+  // 퐁이 제안 '알람 당기기' — 설정 탭으로 가서 알람 간격 카드로 스크롤(시간 조정 위치)
+  const goAlarmSettings = (): void => {
+    setMode('settings')
+    setTimeout(() => {
+      alarmCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      alarmCardRef.current?.classList.add('mh__card--flash')
+      setTimeout(() => alarmCardRef.current?.classList.remove('mh__card--flash'), 1400)
+    }, 80)
+  }
   // 결과 첫 두 글자 — 축1(Q1,Q2 다수결)·축3(Q3,Q4 다수결). 2·4번째는 리듬·HRV 해금 전이라 '?'
   const wtAxis1: WtLetter | null = wtAnswers.length >= 2 ? wtDecide(wtAnswers[0], wtAnswers[1]) : null
   const wtAxis3: WtLetter | null = wtAnswers.length >= 4 ? wtDecide(wtAnswers[2], wtAnswers[3]) : null
@@ -1383,7 +1393,7 @@ export default function ChatApp() {
                 <div className="mh__card mh__rep-tip">
                   <p>🦊 퐁이 제안 · “요즘 수요일 오후 3시쯤 자주 바빠지시는 것 같아요. 그 시간 전에 미리 스트레스 알람을 당겨둘까요?”</p>
                   <div className="mh__tip-actions">
-                    <button type="button" className="mh__tip-go">알람 당기기</button>
+                    <button type="button" className="mh__tip-go" onClick={goAlarmSettings}>알람 당기기</button>
                     <button type="button" className="mh__tip-no">닫기</button>
                   </div>
                 </div>
@@ -1391,7 +1401,7 @@ export default function ChatApp() {
             ) : mode === 'home' ? null : (
               /* ── ⚙️ 설정 탭 (별도 창 없음 — 미니홈에 통합) ── */
               <div className="mh__settings">
-                <div className="mh__card">
+                <div className="mh__card" ref={alarmCardRef}>
                   <div className="mh__card-head">알람 간격</div>
                   <label className="mh__row">
                     물 목표(컵)
@@ -1480,22 +1490,18 @@ export default function ChatApp() {
                   </label>
                 </div>
 
+                {/* 약 등록·관리 — 설정 탭에서는 약지도에서 등록한 약 '목록·관리'만. 새 등록·입력은 약지도 탭에서만 */}
                 <div className="mh__card">
-                  <div className="mh__card-head">💊 약 등록 · 관리</div>
-                  {config.medications.length > 0 && (
-                    <ul className="mh__meds">
+                  <div className="mh__card-head">💊 약 등록 관리</div>
+                  {config.medications.length > 0 ? (
+                    <ul className="mh__meds mh__meds--manage">
                       {config.medications.map((m) => (
                         <li key={m.id}>
                           <span className="mh__med-info">
-                            <span className="mh__med-check">{medAllTakenToday(intake, m.id, m.times, Date.now()) ? '✅' : '⬜'}</span>
                             <span className="mh__med-text">
-                              <span className="mh__med-name" title={m.name}>{m.name}</span>
+                              <span className="mh__med-name" title={m.name}>💊 {m.name}</span>
                               <small className="mh__med-time">
-                                {m.times.flatMap((t, i) => {
-                                  const done = medDoseTakenToday(intake, m.id, t, Date.now())
-                                  const chip = <span key={t} className={done ? 'mh__med-time--done' : undefined}>{fmtTime(t)}</span>
-                                  return i === 0 ? [chip] : [<span key={t + '_sep'}>, </span>, chip]
-                                })}
+                                매일 {m.times.map(fmtTime).join(', ')}
                               </small>
                             </span>
                           </span>
@@ -1505,96 +1511,22 @@ export default function ChatApp() {
                               <button className="mh__med-del" onClick={() => setConfirmDelId(null)}>취소</button>
                             </span>
                           ) : (
-                            <button className="mh__med-del" onClick={() => setConfirmDelId(m.id)}>삭제</button>
+                            <span className="mh__med-manage">
+                              {/* 수정 — 약 입력은 약지도 탭에서만. 수정도 약지도로 이동 */}
+                              <button className="mh__med-edit" onClick={() => setMode('med')}>수정</button>
+                              <button className="mh__med-del" onClick={() => setConfirmDelId(m.id)} aria-label={`${m.name} 삭제`}>🗑</button>
+                            </span>
                           )}
                         </li>
                       ))}
                     </ul>
-                  )}
-                  {/* 약이 1개 이상이면 입력 폼을 숨기고 '➕ 약 추가' 버튼만 노출 — 누르면 폼 펼침(PM 요청) */}
-                  {config.medications.length > 0 && !showAddForm ? (
-                    <button
-                      className="mh__gsubmit"
-                      style={{ marginTop: 8, width: '100%' }}
-                      onClick={() => { setShowAddForm(true); setRegNotice(''); setSelectedProduct(null); setSName(''); setSTimes(['09:00']) }}
-                    >
-                      ➕ 약 추가
-                    </button>
                   ) : (
-                  <div className="mh__guiform" style={{ marginTop: config.medications.length > 0 ? 8 : 4 }}>
-                    <input
-                      className="mh__ginput"
-                      placeholder="약/영양제 이름"
-                      value={sName}
-                      onChange={(e) => { setSelectedProduct(null); setSName(e.target.value); setRegNotice('') }}
-                      maxLength={200}
-                      aria-label="약·건기식 제품 검색"
-                    />
-                    <p className="mh__search-status" role="status" aria-live="polite">{selectedProduct ? `선택: ${selectedProduct.product_name}` : searchStatus}</p>
-                    {!selectedProduct && catalogItems.length > 0 && (
-                      <ul className="mh__cand" aria-label="제품 검색 후보">
-                        {catalogItems.map((item) => (
-                          <li key={`${item.item_type}-${item.product_id}`}>
-                            <button type="button"
-                              onClick={() => { setSelectedProduct(item); setSName(item.product_name); setCatalogItems([]) }}>
-                              {item.product_name}<br /><small>{item.manufacturer_name ?? '제조사 정보 없음'} · {item.item_type === 'DRUG' ? '의약품' : '건강기능식품'}</small>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    {!selectedProduct && sName.trim() && searchStatus !== '검색 중…' && (
-                      <button type="button" className="mh__search-retry" onClick={() => setSearchRevision((n) => n + 1)}>다시 검색</button>
-                    )}
-                    <div className="mh__gtimes">
-                      {sTimes.map((t, i) => (
-                        <span key={i} className="mh__gtime">
-                          <TimeSelect
-                            value={t}
-                            onChange={(v) => { setSTimes((prev) => prev.map((x, idx) => (idx === i ? v : x))); setRegNotice('') }}
-                          />
-                          {sTimes.length > 1 && (
-                            <button onClick={() => setSTimes((prev) => prev.filter((_, idx) => idx !== i))}>−</button>
-                          )}
-                        </span>
-                      ))}
-                      <button className="mh__gadd" onClick={() => setSTimes((prev) => [...prev, '13:00'])}>
-                        + 복용 시간
-                      </button>
-                    </div>
-                    {regNotice && <p className="mh__reg-notice" role="status" aria-live="polite">{regNotice}</p>}
-                    <button
-                      className="mh__gsubmit"
-                      disabled={!sName.trim() || !selectedProduct || sTimes.some((t) => !t)}
-                      onClick={() => {
-                        if (!sName.trim() || !selectedProduct || sTimes.some((t) => !t)) return
-                        const ok = registerMed(selectedProduct.product_name, sTimes.map((t) => ({ time: t, label: t })), selectedProduct)
-                        if (!ok) {
-                          // 같은 약·같은 시간 — 입력은 그대로 두고 안내만. 시간을 바꿔 다시 등록 가능.
-                          setRegNotice('이미 등록된 약·시간이에요 — 시간을 바꿔서 다시 등록해 주세요.')
-                          return
-                        }
-                        setRegNotice('')
-                        setSelectedProduct(null)
-                        setSName('')
-                        setSTimes(['09:00'])
-                        setShowAddForm(false) // 등록 후 폼을 다시 접어 목록만 보이게(PM 요청)
-                      }}
-                    >
-                      {config.medications.length > 0 ? '등록' : '약 등록'}
-                    </button>
-                    {config.medications.length > 0 && (
-                      <button
-                        type="button"
-                        className="mh__gcancel"
-                        style={{ marginTop: 6, width: '100%', background: 'none', border: 'none', color: '#8a8066', fontSize: 12, cursor: 'pointer' }}
-                        onClick={() => { setShowAddForm(false); setRegNotice(''); setSelectedProduct(null); setSName(''); setSTimes(['09:00']) }}
-                      >
-                        취소
-                      </button>
-                    )}
-                  </div>
+                    <p className="mh__empty">아직 등록된 약이 없어요 — 약지도 탭에서 등록해보세요!</p>
                   )}
+                  {/* + 새 약 등록 — 약지도 탭으로 이동(입력은 약지도에서만) */}
+                  <button type="button" className="mh__med-addlink" onClick={() => setMode('med')}>
+                    + 새 약 등록
+                  </button>
                 </div>
 
 
