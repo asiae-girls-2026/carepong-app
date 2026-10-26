@@ -391,6 +391,7 @@ export default function ChatApp() {
   const [regNotice, setRegNotice] = useState('') // 중복 등록 안내(비차단) — 알럿 대신 인앱 메시지
   const [showAddForm, setShowAddForm] = useState(false) // 약 1개 이상일 때: '➕ 약 추가' 눌러야 입력 폼이 펼쳐짐(PM 요청)
   const [confirmDelId, setConfirmDelId] = useState<string | null>(null) // 약 삭제 인앱 2단계 확인(비차단)
+  const [editingMedId, setEditingMedId] = useState<string | null>(null) // 설정 '수정' → 약지도에서 그 약 교체 중(null=일반 등록)
   const [copied, setCopied] = useState(false) // 회원번호 복사 얼럿
   // 업무유형 테스트 설문 모달 — step: 0~3 문항, 'result' 결과(첫 두 글자). answers 는 각 문항 선택 글자.
   const [wtStep, setWtStep] = useState<number | 'result' | null>(null) // null=닫힘
@@ -532,6 +533,27 @@ export default function ChatApp() {
       if (err) console.error('QR 생성 실패', err)
     })
   }, [hrvOpen, config.memberId, pet?.name])
+  // 설정 '수정' → 약지도로 넘어오면 그 약 이름으로 자동 검색해서 '약 보기창'(후보)을 다시 띄움
+  useEffect(() => {
+    if (!editingMedId || modeRef.current !== 'med') return
+    const target = config.medications.find((m) => m.id === editingMedId)
+    if (!target) { setEditingMedId(null); return }
+    const thinkingId = push({ role: 'pet', text: '', thinking: true })
+    const started = Date.now()
+    push({ role: 'pet', text: `‘${target.name}’을(를) 수정할게요. 그대로 둘지, 다른 약으로 바꿀지 아래에서 골라주세요 🔧` })
+    window.careApi
+      .searchDrug(target.name)
+      .then((res) => {
+        if (res.error) resolveThinking(thinkingId, { role: 'pet', text: res.error }, started)
+        else if (res.items.length > 0)
+          resolveThinking(thinkingId, { role: 'pet', text: `‘${target.name}’ 검색 결과예요. 바꿀 약을 골라주세요 💊`, candidates: res.items }, started)
+        else
+          resolveThinking(thinkingId, { role: 'pet', text: '으음, 그 약을 다시 못 찾았어요. 바꿀 약 이름을 쳐주세요.' }, started)
+      })
+      .catch(() => resolveThinking(thinkingId, { role: 'pet', text: '앗, 정보를 가져오는 데 문제가 생겼어요. 잠시 후 다시 시도해 주세요!' }, started))
+    // 이 effect는 editingMedId가 바뀔 때 1회만 — mode는 ref로 확인(의존성 제외해 중복 검색 방지)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingMedId])
   const waterToday = intake.waterDayStart === startOfLocalDay(Date.now()) ? intake.waterCups : 0 // 오늘 마신 물(2#16)
   const lifetimeChats = pet?.lifetime.chats ?? 0 // = 누적 하트 (방꾸미기 진척)
   const moodDoneToday = !!diary[dayKeyOf(Date.now())]?.mood // 기분은 하루 1회만(5#38) — diary는 재실행에도 유지
@@ -721,17 +743,66 @@ export default function ChatApp() {
         resolveThinking(thinkingId, { role: 'pet', text: '앗, 지금 정보를 가져오는 데 문제가 생겼어요. 잠시 후 다시 시도해 주세요!' }, started),
       )
   }
-  // 약지도 대화에서 후보 선택 → 시간입력 폼 메시지 push
+  // 설정 '수정' 클릭 → 그 약을 수정 대상으로 잡고 약지도로 이동(이동 후 자동 검색은 useEffect)
+  const startEditMed = (medId: string): void => {
+    setEditingMedId(medId)
+    setMode('med')
+  }
+  // 약지도 대화에서 후보 선택 → 시간입력 폼 메시지 push(수정 모드면 현재 시간을 채워 둠)
   const pickCandidate = (msgId: number, product: CatalogItem): void => {
     // 후보 버튼 제거(재클릭 방지)
     setFeeds((prev) => ({ ...prev, med: prev.med.map((m) => (m.id === msgId ? { ...m, candidates: undefined } : m)) }))
-    setGTimes(['09:00'])
-    push({ role: 'pet', text: `‘${product.product_name}’, 언제 챙길까요? 시간을 정해 등록해요 ⏰`, regProduct: product })
+    const editing = editingMedId ? config.medications.find((m) => m.id === editingMedId) : null
+    setGTimes(editing && editing.times.length > 0 ? [...editing.times] : ['09:00'])
+    push({
+      role: 'pet',
+      text: editingMedId
+        ? `‘${product.product_name}’, 시간을 정해 수정할게요 ⏰`
+        : `‘${product.product_name}’, 언제 챙길까요? 시간을 정해 등록해요 ⏰`,
+      regProduct: product,
+    })
   }
-  // 후보 선택 후 시간입력 폼에서 등록
+  // 후보 선택 후 시간입력 폼에서 등록 / 수정(editingMedId 있으면 기존 약 교체)
   const submitReg = (formMsgId: number, product: CatalogItem): void => {
-    const ok = registerMed(product.product_name, gTimes.map((t) => ({ time: t, label: t })), product)
     setFeeds((prev) => ({ ...prev, med: prev.med.map((m) => (m.id === formMsgId ? { ...m, regProduct: undefined } : m)) }))
+
+    if (editingMedId) {
+      // ── 수정 모드: 기존 약을 교체(같은 id 유지). 약 이름이 바뀌면 복약 기록 리셋, 시간만 바뀌면 유지 ──
+      const target = config.medications.find((m) => m.id === editingMedId)
+      const nameChanged = !!target && target.name !== product.product_name
+      const nextCfg = updateMed(config, editingMedId, {
+        name: product.product_name,
+        times: [...gTimes].sort(),
+        item_type: product.item_type,
+        product_id: product.product_id,
+        external_id: product.external_id,
+        manufacturer_name: product.manufacturer_name,
+      })
+      window.petApi.saveConfig(nextCfg)
+      setConfig(nextCfg)
+      if (nameChanged) {
+        // 다른 약이 됐으니 '오늘 먹음' 기록 초기화
+        setIntake((prev) => {
+          const rest = { ...prev.medsTakenAt }
+          delete rest[editingMedId]
+          const next = { ...prev, medsTakenAt: rest }
+          window.petApi.saveIntake(next)
+          return next
+        })
+      }
+      setGTimes(['09:00'])
+      setEditingMedId(null)
+      push({
+        role: 'pet',
+        text: nameChanged
+          ? `${target?.name ?? '기존 약'} → ${product.product_name}, ${gTimes.join(', ')}로 바꿨어요! 💊 (복약 기록은 새로 시작해요)`
+          : `${product.product_name} 시간을 ${gTimes.join(', ')}로 바꿨어요! 💊`,
+      })
+      return
+    }
+
+    // ── 등록 모드(기존) ──
+    const ok = registerMed(product.product_name, gTimes.map((t) => ({ time: t, label: t })), product)
     if (!ok) {
       push({ role: 'pet', text: '이미 등록된 약·시간이에요 🙂 시간을 바꿔서 다시 등록해 주세요.' })
       return
@@ -1623,8 +1694,8 @@ export default function ChatApp() {
                             </span>
                           ) : (
                             <span className="mh__med-manage">
-                              {/* 수정 — 약 입력은 약지도 탭에서만. 수정도 약지도로 이동 */}
-                              <button className="mh__med-edit" onClick={() => setMode('med')}>수정</button>
+                              {/* 수정 — 약지도로 이동 + 그 약 자동 검색(약 보기창 재등장). 약 바뀌면 교체 */}
+                              <button className="mh__med-edit" onClick={() => startEditMed(m.id)}>수정</button>
                               <button className="mh__med-del" onClick={() => setConfirmDelId(m.id)} aria-label={`${m.name} 삭제`}>🗑</button>
                             </span>
                           )}
