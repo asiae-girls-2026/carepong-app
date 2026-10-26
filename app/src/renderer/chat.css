@@ -1174,3 +1174,6 @@ body {
 
 /* 데이터 연결 예정 안내 */
 .mh__rep-foot--soon { color: #b7afc6; font-style: italic; }
+
+/* 업무유형 과 카드 — 동물 확정 전 미스터리 박스 */
+.mh__type-face--myst { image-rendering: pixelated; }

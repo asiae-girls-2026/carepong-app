@@ -1462,10 +1462,10 @@ export default function ChatApp() {
                     <>
                       <div className="mh__type-title">{wtFamily.name} · {wtFamily.a}일까, {wtFamily.b}일까?</div>
                       <div className="mh__type-stage">
-                        {petImg && <img className="mh__type-face" src={petImg} alt="" aria-hidden draggable={false} />}
+                        {/* 동물 확정 전 — 미스터리 박스(도감 에셋 재사용). 리듬·HRV 해금되면 최종 캐릭터로 교체 예정 */}
+                        <img className="mh__type-face mh__type-face--myst" src={dexImg('mystery')} alt="아직 미공개" draggable={false} />
                         <button type="button" className="mh__hrv-btn" onClick={() => setHrvOpen(true)}>💓<br />HRV<br />측정</button>
                       </div>
-                      <p className="mh__type-sub">과(科) 공개 · 리듬 5일이면 동물 확정, HRV 4회면 수식어까지 (예: 매 · “출근 2시간 만에 오늘 일을 다 끝내는 사람”)</p>
                     </>
                   ) : (
                     /* ── 설문 전: 잠금 ── */
