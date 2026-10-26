@@ -919,7 +919,10 @@ export default function ChatApp() {
       <div className="mh__petbar">
         <span className="mh__petbar-name">{petName}</span>
         <span className="mh__petbar-meta">Lv.{pet?.stage ?? 1} · {pet?.generation ?? 1}번째 친구</span>
-        <span className="mh__petbar-today">TODAY 😊</span>
+        {/* TODAY 배지 — 오늘 마음관리에서 고른 기분 이모지와 연동. 아직 안 골랐으면 배지 숨김 */}
+        {(mood || diary[dayKeyOf(Date.now())]?.mood) && (
+          <span className="mh__petbar-today">TODAY {mood || diary[dayKeyOf(Date.now())]?.mood}</span>
+        )}
       </div>
 
       {update && !update.isLatest && (
