@@ -88,6 +88,25 @@ export function isWaterDue(
   return now - lastDrinkAt >= config.intervalMinutes * 60 * 1000
 }
 
+// ── 복약 2차 서버 동기화: 요일 변환 (앱 0=일~6=토  ↔  서버 0=월~6=일) ──
+// 서버 docs/medication-phase2-api.md: repeat_days 는 0=월요일 … 6=일요일.
+export function appDayToServer(appDay: number): number {
+  return (appDay + 6) % 7 // 일(0)→6, 월(1)→0, … 토(6)→5
+}
+export function serverDayToApp(serverDay: number): number {
+  return (serverDay + 1) % 7 // 월(0)→1, … 일(6)→0
+}
+// 로컬 MedSchedule.days(0=일~6=토, 빈 배열=매일) → 서버 repeat_days(0=월~6=일, 매일=0..6)
+export function toServerRepeatDays(days: number[]): number[] {
+  if (!days || days.length === 0) return [0, 1, 2, 3, 4, 5, 6] // 매일
+  return [...days].map(appDayToServer).sort((a, b) => a - b)
+}
+// 서버 repeat_days → 로컬 days(매일이면 빈 배열로 보관)
+export function fromServerRepeatDays(repeatDays: number[]): number[] {
+  if (!repeatDays || repeatDays.length >= 7) return []
+  return [...repeatDays].map(serverDayToApp).sort((a, b) => a - b)
+}
+
 // 방해금지 시간대 판정 (자정 넘는 구간 지원). start/end = "HH:MM"
 export function isWithinQuiet(now: number, start: string, end: string): boolean {
   const d = new Date(now)

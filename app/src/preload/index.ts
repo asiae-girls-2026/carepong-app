@@ -63,6 +63,11 @@ import type { DrugSearchResult } from '../main/drugSearch'
 import type { StressEvent, StressAlert } from '../main/stress'
 import type { ChatReply, ChatTurn } from '../main/api'
 
+// 복약 서버 동기화 결과 — main medCall 의 반환 형태. data 구조는 서버 응답(미확정 필드는 unknown).
+export type MedResult =
+  | { ok: true; data: unknown }
+  | { ok: false; status: number | null; message: string }
+
 const careApi = {
   searchDrug: (name: string): Promise<DrugSearchResult> => ipcRenderer.invoke('drug:search', name),
   openChat: (mode?: 'med' | 'heart' | 'settings'): void => ipcRenderer.send('care:openChat', mode ?? 'heart'),
@@ -109,6 +114,15 @@ const careApi = {
   // history: 직전 대화(오래된 순, 최대 10개). 앞 얘기를 이어받게 서버에 함께 보낸다.
   chat: (message: string, history: ChatTurn[] = []): Promise<ChatReply> =>
     ipcRenderer.invoke('api:chat', { message, history }),
+  // ── 복약 2차 서버 동기화 (docs/medication-phase2-api.md) — 결과 {ok,data}|{ok:false,status} ──
+  medRegister: (body: unknown): Promise<MedResult> => ipcRenderer.invoke('med:register', body),
+  medPatch: (id: number | string, patch: unknown): Promise<MedResult> => ipcRenderer.invoke('med:patch', id, patch),
+  medDelete: (id: number | string): Promise<MedResult> => ipcRenderer.invoke('med:delete', id),
+  medList: (active?: boolean): Promise<MedResult> => ipcRenderer.invoke('med:list', active),
+  medToday: (date: string, timezone?: string): Promise<MedResult> => ipcRenderer.invoke('med:today', date, timezone),
+  medIntake: (id: number | string, intake: unknown): Promise<MedResult> => ipcRenderer.invoke('med:intake', id, intake),
+  medIntakeBatch: (events: unknown[]): Promise<MedResult> => ipcRenderer.invoke('med:intakeBatch', events),
+  medAdherence: (from: string, to: string, timezone?: string): Promise<MedResult> => ipcRenderer.invoke('med:adherence', from, to, timezone),
 }
 
 contextBridge.exposeInMainWorld('careApi', careApi)

@@ -394,6 +394,26 @@ ipcMain.on('care:openChat', (_e, mode: 'home' | 'med' | 'heart' | 'settings') =>
 // 챗 창에서 '1분 쉬어가기' → 오버레이의 완화 흐름 실행
 ipcMain.on('care:relief', () => win?.webContents.send('pet:menuCommand', 'relief'))
 
+// ── 복약 2차 서버 동기화 (docs/medication-phase2-api.md) ──
+// 렌더러에서 호출 → main(토큰 보유)이 서버로. 실패해도 로컬 UI·알림·보상은 유지(렌더러가 처리).
+// 공통: 성공 시 {ok:true, data}, 실패 시 {ok:false, status} 반환 — 렌더러가 재시도/큐 판단.
+async function medCall<T>(fn: () => Promise<T>): Promise<{ ok: true; data: T } | { ok: false; status: number | null; message: string }> {
+  try {
+    return { ok: true, data: await fn() }
+  } catch (e) {
+    const status = (e as { status?: number }).status ?? null
+    return { ok: false, status, message: (e as Error).message }
+  }
+}
+ipcMain.handle('med:register', (_e, body: Parameters<typeof api.registerMedication>[0]) => medCall(() => api.registerMedication(body)))
+ipcMain.handle('med:patch', (_e, id: number | string, patch: Parameters<typeof api.patchMedication>[1]) => medCall(() => api.patchMedication(id, patch)))
+ipcMain.handle('med:delete', (_e, id: number | string) => medCall(() => api.deleteMedication(id)))
+ipcMain.handle('med:list', (_e, active?: boolean) => medCall(() => api.listMedications(active)))
+ipcMain.handle('med:today', (_e, date: string, timezone?: string) => medCall(() => api.getMedicationsToday(date, timezone)))
+ipcMain.handle('med:intake', (_e, id: number | string, intake: Parameters<typeof api.postMedicationIntake>[1]) => medCall(() => api.postMedicationIntake(id, intake)))
+ipcMain.handle('med:intakeBatch', (_e, events: Parameters<typeof api.postMedicationIntakeBatch>[0]) => medCall(() => api.postMedicationIntakeBatch(events)))
+ipcMain.handle('med:adherence', (_e, from: string, to: string, timezone?: string) => medCall(() => api.getMedicationAdherence(from, to, timezone)))
+
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
 // 중복 실행 방지(1#8) — 두 번째 실행은 종료하고 기존 창을 앞으로 가져온다

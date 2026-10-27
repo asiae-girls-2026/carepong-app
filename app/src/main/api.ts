@@ -45,7 +45,7 @@ async function call(
   method: string,
   url: string,
   body?: unknown,
-  { timeoutMs = 5000 }: { timeoutMs?: number } = {},
+  { timeoutMs = 5000, headers: extraHeaders }: { timeoutMs?: number; headers?: Record<string, string> } = {},
 ): Promise<any> {
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), timeoutMs)
@@ -57,6 +57,7 @@ async function call(
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(legacyCp ? { 'X-User-Id': legacyCp } : {}), // windows/self-reports는 서버 인증 전환까지 회원번호 사용
+        ...(extraHeaders ?? {}), // 복약 등록의 Idempotency-Key 등 추가 헤더
       },
       body: body ? JSON.stringify(body) : undefined,
     })
@@ -343,3 +344,66 @@ export async function uploadRawBatch(meta: Record<string, unknown>, compressed: 
     clearTimeout(timeout)
   }
 }
+
+// ══ 복약 2차 운영 API (docs/medication-phase2-api.md) ═══════════════════════
+// 요일은 서버 기준 0=월~6=일, 타임존 Asia/Seoul. schedule.repeat_days 변환은 호출부(main)에서 끝낸 값을 받는다.
+// MISSED 는 앱이 자동 전송하지 않는다(무응답·미실행). 사용자 행동은 TAKEN / SNOOZED 만 보낸다.
+
+export interface MedScheduleBody {
+  times: string[] // "HH:MM"
+  repeat_days: number[] // 0=월 ~ 6=일 (서버 규칙). 매일이면 [0,1,2,3,4,5,6]
+  timezone: string // "Asia/Seoul"
+}
+export interface MedRegisterBody {
+  item_type: 'DRUG' | 'HFF'
+  product_id: number
+  client_medication_id: string // 로컬 등록과 서버 등록 연결키(멱등)
+  schedule: MedScheduleBody
+  start_date: string | null // "YYYY-MM-DD"
+  end_date: string | null
+  dose_text?: string | null
+}
+export interface MedIntakeBody {
+  occurrence_id: number
+  event_type: 'TAKEN' | 'SNOOZED' // MISSED 는 앱이 보내지 않음
+  client_event_id: string // 재전송 시 동일 값 유지(멱등)
+  occurred_at: string // ISO8601 + TZ
+}
+
+/** 제품·일정 등록. client_medication_id(멱등) 필수. Idempotency-Key 헤더도 함께 보냄. */
+export const registerMedication = (medBody: MedRegisterBody): Promise<any> =>
+  call('POST', `${V}/users/me/medications`, medBody, {
+    headers: { 'Idempotency-Key': medBody.client_medication_id },
+  })
+
+/** 일정 수정. schedule_revision(마지막 목록 조회값) 불일치 시 409 SCHEDULE_REVISION_CONFLICT. */
+export const patchMedication = (
+  id: number | string,
+  patch: { schedule_revision: number; schedule: MedScheduleBody },
+): Promise<any> => call('PATCH', `${V}/users/me/medications/${id}`, patch)
+
+/** 등록 해제(active=false). */
+export const deleteMedication = (id: number | string): Promise<any> =>
+  call('DELETE', `${V}/users/me/medications/${id}`)
+
+/** 등록약 목록(+schedule_revision). active 선택. */
+export const listMedications = (active?: boolean): Promise<any> =>
+  call('GET', `${V}/users/me/medications${active === undefined ? '' : `?active=${active}`}`)
+
+/** 오늘 회차 + scheduled/taken/missed/unknown/pending 합계. */
+export const getMedicationsToday = (date: string, timezone = 'Asia/Seoul'): Promise<any> =>
+  call('GET', `${V}/users/me/medications/today?date=${date}&timezone=${encodeURIComponent(timezone)}`)
+
+/** 먹었어요(TAKEN)·나중에(SNOOZED). 동일 client_event_id 재전송은 중복 저장 안 됨. */
+export const postMedicationIntake = (id: number | string, intake: MedIntakeBody): Promise<any> =>
+  call('POST', `${V}/users/me/medications/${id}/intakes`, intake)
+
+/** 오프라인 큐 재전송(최대 500건). accepted_ids / rejected_ids 반환. */
+export const postMedicationIntakeBatch = (
+  events: (MedIntakeBody & { user_medication_id: number | string })[],
+): Promise<any> =>
+  call('POST', `${V}/users/me/medication-intakes/batch`, { events: events.slice(0, 500) }, { timeoutMs: 20000 })
+
+/** 기간별 복약 집계(리포트). 복약률 = TAKEN/(TAKEN+MISSED), UNKNOWN·미판정 SCHEDULED 제외. */
+export const getMedicationAdherence = (from: string, to: string, timezone = 'Asia/Seoul'): Promise<any> =>
+  call('GET', `${V}/users/me/medication-adherence?from=${from}&to=${to}&timezone=${encodeURIComponent(timezone)}`)
