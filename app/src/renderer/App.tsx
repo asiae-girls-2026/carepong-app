@@ -211,6 +211,7 @@ export default function App() {
   const reminderRef = useRef<Reminder | null>(null)
   const reminderAutoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reminderElRef = useRef<HTMLDivElement | null>(null) // 알람 팝업 DOM — hover 영역 정확 판정용
+  const stressElRef = useRef<HTMLDivElement | null>(null) // 스트레스 팝업 DOM — 복약 알람처럼 영역 위에서만 클릭 받기(다른 작업 방해 X)
   // 겹친 알람 대기열 — 메인(reminder)이 떠 있는 10분 사이 도래한 알람들. 표시는 1개 더 + "+N"(제안 반영).
   const [extras, setExtras] = useState<Reminder[]>([])
   const extrasRef = useRef<Reminder[]>([])
@@ -228,7 +229,6 @@ export default function App() {
   const happyMaxRef = useRef(false) // 행복=100 멘트 1회
   const lowEnergyRef = useRef(false) // 기력<40 멘트 1회
   const stressAlertRef = useRef(false)
-  const stressPendingTimer = useRef<ReturnType<typeof setTimeout> | null>(null) // 무응답 pending 자가보고 타이머
   const reliefOpenRef = useRef(false)
   const lastMouseSentRef = useRef(0)
   // 스트레스 팝업(P03) 맥락 — 서버 postWindow 응답에서 전달받아 자가보고(postSelfReport)에 실어 보냄
@@ -865,15 +865,15 @@ export default function App() {
   }, [])
 
   // ── 스트레스: 지수 구독 + 임계 초과 개입 제안 ──
-  // 닫는 이유(status)를 받으면 서버 자가보고에 함께 보낸다(dismissed/ignored). 없으면 전송 없이 숨기기만(예/아니요 등 이미 보낸 경우).
-  const dismissStressAlert = (status?: 'dismissed' | 'ignored'): void => {
-    if (stressPendingTimer.current) { clearTimeout(stressPendingTimer.current); stressPendingTimer.current = null }
-    if (status && promptCtxRef.current) answerStressPrompt(null, status) // 닫기=dismissed / 밖 클릭=ignored
+  // 닫는 이유(status)를 받으면 서버 자가보고에 함께 보낸다(X 닫기=dismissed). 없으면 전송 없이 숨기기만(예/아니요 등 이미 보낸 경우).
+  const dismissStressAlert = (status?: 'dismissed'): void => {
+    if (status && promptCtxRef.current) answerStressPrompt(null, status) // X 닫기 = dismissed
     stressAlertRef.current = false
     setStressAlert(false)
     window.careApi.snoozeAlert()
     interactive.current = false
     window.petApi.setClickThrough(true)
+    setTimeout(scanDue, 150) // 스트레스 팝업 닫힘 → 그동안 대기한 복약·물·알람이 바로 뜨게(우선순위)
   }
   // 스트레스 팝업(P03) 응답 자가보고 — Route1(감지 팝업)일 때만 전송. 팝업은 자동 안 닫힘 → 4상태 중 하나로 반드시 1회
   const answerStressPrompt = (yesno: 1 | 0 | null, status: 'answered' | 'dismissed' | 'ignored' | 'pending'): void => {
@@ -891,7 +891,6 @@ export default function App() {
     const latency_ms = new Date(clickedAt).getTime() - new Date(ctx.promptTime).getTime()
     log('stress_prompt_answered', 'P03', { answer: yesno === 1 ? 'yes' : yesno === 0 ? 'no' : 'timeout', latency_ms })
     promptCtxRef.current = null
-    if (stressPendingTimer.current) { clearTimeout(stressPendingTimer.current); stressPendingTimer.current = null } // 응답 완료 → pending 타이머 해제
   }
   // "아니요" — 오탐 확인 응답. 스누즈 처리 + 다행이라는 인사 (추후 감지 모델 라벨로도 활용 가능)
   const dismissNotStressed = (): void => {
@@ -1007,19 +1006,7 @@ export default function App() {
     )
   }
 
-  // 스트레스 팝업이 떠 있는 동안 팝업 '밖'을 클릭하면 ignored 자가보고(팝업 숨김). 팝업 안 클릭은 무시.
-  useEffect(() => {
-    if (!stressAlert) return
-    const onDocDown = (e: PointerEvent): void => {
-      const t = e.target as HTMLElement | null
-      if (t && t.closest('.pet__reminder--stress')) return // 팝업 안(예/아니요/X)은 각 버튼이 처리
-      dismissStressAlert('ignored')
-    }
-    // 팝업이 뜬 직후의 이벤트를 바로 먹지 않도록 다음 틱부터 감지
-    const id = setTimeout(() => document.addEventListener('pointerdown', onDocDown, true), 0)
-    return () => { clearTimeout(id); document.removeEventListener('pointerdown', onDocDown, true) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stressAlert])
+  // (스트레스 팝업은 밖 클릭으로 닫지 않는다 — 예/아니오/X 버튼으로만 닫힘. 기획 변경)
 
   // 지수 게이지는 노출하지 않는다 — 스트레스가 감지되면 완화 제안 프롬프트로만 표시(기획 결정)
   useEffect(() => {
@@ -1030,21 +1017,15 @@ export default function App() {
       if (reliefOpenRef.current || stressAlertRef.current || reminderRef.current) return
       stressAlertRef.current = true
       setStressAlert(true)
-      interactive.current = true
-      window.petApi.setClickThrough(false)
-      window.petApi.raiseTop?.() // 스트레스 알림도 반드시 눌러야 하므로 최상단으로
+      // 클릭 통과는 끄지 않는다 — 복약 알람처럼 onMove가 '팝업 위에서만' 클릭을 받게 한다(응답 전에도 다른 작업 가능, 기획 상의).
+      window.petApi.raiseTop?.() // 팝업은 항상 최상단(어떤 팝업보다 우선)
       // 서버(postWindow) 응답 맥락 저장 — 자가보고(postSelfReport)에 실어 보냄 (호출위치표 B)
       promptCtxRef.current = {
         windowId: s.windowId ?? null,
         promptType: s.promptType ?? 'spike',
         promptTime: new Date().toISOString(),
       }
-      // 무응답 pending — 15분 유효창 내 응답이 없으면 pending 자가보고 1회 전송(팝업은 유지, 서버가 다음 창에서 처리)
-      if (stressPendingTimer.current) clearTimeout(stressPendingTimer.current)
-      stressPendingTimer.current = setTimeout(() => {
-        if (promptCtxRef.current) answerStressPrompt(null, 'pending')
-        stressPendingTimer.current = null
-      }, 15 * 60 * 1000)
+      // 스트레스 팝업은 자동으로 닫히지 않는다 — 예/아니오/닫기(X) 버튼을 누를 때까지 유지(기획 변경).
       log('stress_prompt_shown', 'P03', { stress_score: s.stressScore ?? s.score, nth_today: s.nthToday ?? null })
       window.petApi.notify('케어퐁', '스트레스를 받고 계신 것 같아요. 잠깐 확인해 주세요 🥺')
     })
@@ -1068,20 +1049,18 @@ export default function App() {
       })
       // 알람 말풍선 영역 — 물·스트레칭·휴식 알람은 여기 올렸을 때만 클릭 가능.
       // 팝업의 '실제' 화면 위치(ref)로 판정 → 머리 근처·화면 가장자리(아래/좌/우) 배치까지 정확히 커버.
-      let overBubble = false
-      const rEl = reminderElRef.current
-      if (reminderRef.current != null && rEl) {
-        const rb = rEl.getBoundingClientRect()
-        const m = 12 // 여유 마진(px)
-        overBubble =
-          cursor.x >= rb.left - m &&
-          cursor.x <= rb.right + m &&
-          cursor.y >= rb.top - m &&
-          cursor.y <= rb.bottom + m
+      const m = 12 // 여유 마진(px)
+      const overEl = (el: HTMLDivElement | null): boolean => {
+        if (!el) return false
+        const rb = el.getBoundingClientRect()
+        return cursor.x >= rb.left - m && cursor.x <= rb.right + m && cursor.y >= rb.top - m && cursor.y <= rb.bottom + m
       }
-      // 영역 기반: 펫/말풍선 위에 있을 때만 클릭을 받고, 벗어나면 통과.
-      // (미니홈·바탕화면·다른 창을 막지 않으면서 펫·알람은 눌리게 — 모든 알람 공통)
-      const over = overPet || overBubble
+      let overBubble = false
+      if (reminderRef.current != null) overBubble = overEl(reminderElRef.current)
+      // 스트레스 팝업도 복약 알람처럼 '팝업 위에서만' 클릭 받기 — 그래야 응답 전에도 다른 작업이 안 막힌다(기획 상의).
+      const overStress = stressAlertRef.current ? overEl(stressElRef.current) : false
+      // 영역 기반: 펫/말풍선/스트레스팝업 위에 있을 때만 클릭을 받고, 벗어나면 통과.
+      const over = overPet || overBubble || overStress
       if (over && !interactive.current) {
         interactive.current = true
         window.petApi.setClickThrough(false)
@@ -1090,9 +1069,9 @@ export default function App() {
         interactive.current &&
         !namingRef.current &&
         !rebirthRef.current &&
-        !stressAlertRef.current &&
         !reliefOpenRef.current
       ) {
+        // 스트레스 팝업이 떠 있어도 팝업 밖이면 통과(stressAlertRef 조건 제거) → 다른 작업 가능
         interactive.current = false
         window.petApi.setClickThrough(true)
       }
@@ -1446,7 +1425,7 @@ export default function App() {
             </div>
           )}
           {stressAlert && !reminder && (
-            <div className={`pet__reminder pet__reminder--stress${reminderCls ? ' ' + reminderCls : ''}`} onPointerDown={(e) => e.stopPropagation()}>
+            <div ref={stressElRef} className={`pet__reminder pet__reminder--stress${reminderCls ? ' ' + reminderCls : ''}`} onPointerDown={(e) => e.stopPropagation()}>
               <button className="pet__reminder-x" onClick={() => dismissStressAlert('dismissed')} aria-label="닫기">✕</button>
               <div className="pet__reminder-text">스트레스를 받고 계신 것 같아요 🥺</div>
               <div className="pet__reminder-detail">지금 스트레스를 받고 계신가요?</div>
