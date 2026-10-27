@@ -1148,6 +1148,9 @@ body {
 .mh__hrv-close { background: #fff6ee; color: #a8776d; }
 
 /* ── 설정 탭 약 등록 관리 — 목록·수정·삭제 + 새 약 등록(약지도로) ── */
+/* 등록한 약 개수만큼 목록이 늘어나게 — 공통 .mh__meds 의 108px 높이제한·내부 스크롤 해제.
+   길어지면 설정탭(.mh__settings) 전체 스크롤이 담당하므로 3개 이상도 안 잘림. */
+.mh__meds--manage { max-height: none; overflow-y: visible; }
 .mh__meds--manage li { align-items: center; }
 .mh__med-manage { display: flex; align-items: center; gap: 6px; flex: none; }
 .mh__med-edit {
