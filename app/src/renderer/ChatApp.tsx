@@ -771,7 +771,7 @@ export default function ChatApp() {
     // '오늘 약 보여줘' — 등록된 약 목록
     if (/오늘/.test(text) && /약|복약/.test(text)) {
       const lines = config.medications.map(
-        (m) => `· ${m.name} ${m.times.map(fmtTime).join(', ')} ${takenToday(m.id) ? '✅ 완료' : '⬜ 아직'}`,
+        (m) => `· ${m.name} ${m.times.map(fmtTime).join(', ')} ${takenToday(m.id) ? '✅ 완료' : '⏳ 아직'}`,
       )
       resolveThinking(
         thinkingId,
