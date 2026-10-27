@@ -398,6 +398,11 @@ export default function ChatApp() {
   const [wtAnswers, setWtAnswers] = useState<WtLetter[]>([])
   const [wtDone, setWtDone] = useState(false) // 설문 1회 완료 → 리포트 카드가 결과(과 공개) 상태로
   const [hrvOpen, setHrvOpen] = useState(false) // HRV 측정 모달(QR) — UI만, 로직 추후
+  // 리포트 복약 집계 — 리포트 탭 진입 시 getMedicationAdherence(이번 달)로 채움. null=미조회
+  const [adherence, setAdherence] = useState<{
+    totals?: { taken?: number; missed?: number; scheduled?: number; adherence_rate?: number | null }
+    days?: { date: string; taken?: number; missed?: number; scheduled?: number }[]
+  } | null>(null)
   const [version, setVersion] = useState('') // 현재 설치 버전 (설정 하단 표시)
   const [update, setUpdate] = useState<UpdateInfo | null>(null) // 최신 릴리스 비교 결과
   const [checkingUpdate, setCheckingUpdate] = useState(false)
@@ -533,6 +538,18 @@ export default function ChatApp() {
       if (err) console.error('QR 생성 실패', err)
     })
   }, [hrvOpen, config.memberId, pet?.name])
+  // 리포트 탭 진입 시 이번 달 복약 집계 조회 → 달력 복약 점·월 복약률·연속 복약 실데이터
+  useEffect(() => {
+    if (mode !== 'report') return
+    const d = new Date()
+    const y = d.getFullYear(), mo = d.getMonth()
+    const pad = (n: number): string => String(n).padStart(2, '0')
+    const from = `${y}-${pad(mo + 1)}-01`
+    const to = `${y}-${pad(mo + 1)}-${pad(new Date(y, mo + 1, 0).getDate())}`
+    void window.careApi.medAdherence?.(from, to).then((res) => {
+      if (res?.ok) setAdherence(res.data as typeof adherence)
+    }).catch(() => { /* 실패 시 더미/빈 상태 유지 */ })
+  }, [mode])
   // 설정 '수정' → 약지도로 넘어오면 '시간만 바꾸기 / 다른 약으로 바꾸기' 선택 버튼을 먼저 띄운다
   useEffect(() => {
     if (!editingMedId || modeRef.current !== 'med') return
@@ -1570,13 +1587,33 @@ export default function ChatApp() {
                       const k = `${y}-${String(mo + 1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`
                       return diary[k]?.mood ? 1 : 0
                     }).reduce((a: number, b: number) => a + b, 0)
-                    // 오늘 복약 전부 완료 여부(실데이터) — 과거 날짜별 기록은 복약 로직 연결 후
-                    const medDoneToday =
+                    // 서버 복약 집계(adherence.days) → 날짜별 '복약 다 챙긴 날'(taken>0 && missed===0). 과거 포함.
+                    const takenDates = new Set<string>()
+                    for (const dRow of adherence?.days ?? []) {
+                      if ((dRow.taken ?? 0) > 0 && (dRow.missed ?? 0) === 0) takenDates.add(dRow.date)
+                    }
+                    // 서버 데이터 없을 때(오프라인·미연동)만 오늘 로컬 완료로 폴백
+                    const medDoneTodayLocal =
                       config.medications.length > 0 && config.medications.every((m) => takenToday(m.id))
+                    // 월 복약률(%) · 연속 복약(오늘/어제부터 역순으로 taken 연속)
+                    const rate = adherence?.totals?.adherence_rate
+                    const ratePct = rate != null ? Math.round(rate * 100) : null
+                    const streak = (() => {
+                      if (takenDates.size === 0) return 0
+                      let c = 0
+                      for (let dd = todayNum; dd >= 1; dd--) {
+                        const k = `${y}-${String(mo + 1).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+                        if (takenDates.has(k)) c++
+                        else if (dd !== todayNum) break // 오늘은 아직 안 먹었을 수 있어 건너뜀, 과거는 끊기면 중단
+                      }
+                      return c
+                    })()
                     return (
                       <>
                         <div className="mh__cal-badge">
-                          {moodDays > 0 ? `🖊 이번 달 ${moodDays}일 기분을 기록했어요` : '🖊 기분을 기록하면 달력에 쌓여요'}
+                          {streak > 0
+                            ? `💊 연속 ${streak}일째 복약 성공 중!${ratePct != null ? ` · 이번 달 ${ratePct}%` : ''}`
+                            : moodDays > 0 ? `🖊 이번 달 ${moodDays}일 기분을 기록했어요` : '🖊 기분을 기록하면 달력에 쌓여요'}
                         </div>
                         <div className="mh__cal">
                           {['일', '월', '화', '수', '목', '금', '토'].map((w) => (
@@ -1590,7 +1627,8 @@ export default function ChatApp() {
                             const key = `${y}-${String(mo + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
                             const mood = diary[key]?.mood
                             const isToday = day === todayNum
-                            const medDot = isToday && medDoneToday // 오늘만 실데이터(과거 복약기록은 추후)
+                            // 복약 점 — 서버 집계가 있으면 그 날짜별(과거 포함), 없으면 오늘 로컬 완료로 폴백
+                            const medDot = takenDates.size > 0 ? takenDates.has(key) : (isToday && medDoneTodayLocal)
                             return (
                               <span key={day} className={`mh__cal-cell${isToday ? ' mh__cal-cell--today' : ''}${mood ? ' mh__cal-cell--has' : ''}`}>
                                 <em>{day}</em>
@@ -1605,7 +1643,15 @@ export default function ChatApp() {
                     )
                   })()}
                   <p className="mh__rep-foot">이모지 = 그날 고른 기분 · <i className="mh__cal-dot mh__cal-dot--inline" /> = 복약 다 챙긴 날</p>
-                  <p className="mh__rep-foot mh__rep-foot--soon">연속 복약·주간 완화 요약은 복약 기록이 연결되면 채워져요</p>
+                  {adherence?.totals && (adherence.totals.taken != null || adherence.totals.scheduled != null) ? (
+                    <p className="mh__rep-foot">
+                      이번 달 복약: ✅ {adherence.totals.taken ?? 0}회
+                      {adherence.totals.missed != null && ` · 놓침 ${adherence.totals.missed}회`}
+                      {adherence.totals.adherence_rate != null && <> · 복약률 <b className="mh__up">{Math.round(adherence.totals.adherence_rate * 100)}%</b></>}
+                    </p>
+                  ) : (
+                    <p className="mh__rep-foot mh__rep-foot--soon">복약 기록이 연결되면 이번 달 복약률이 채워져요</p>
+                  )}
                 </div>
 
                 {/* ═══ 나 ═══ */}
