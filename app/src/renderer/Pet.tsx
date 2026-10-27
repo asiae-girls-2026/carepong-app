@@ -44,11 +44,13 @@ export default function Pet({
   const motion = usePose ? 'pose' : chewing ? 'eat' : moving ? 'walk' : blink ? 'blink' : 'still'
   const squish = usePose ? 1 : isHybrid(creature) ? HYBRID_SQUISH : 1
   const flipX = usePose ? 1 : facing * squish
+  // 말풍선 경계 보정 클래스(pet__bubble--below 등)를 게이지용으로 변환 → 펫이 화면 상단이면 게이지도 아래로(잘림 방지)
+  const gaugeEdgeCls = bubbleClass ? bubbleClass.replace(/pet__bubble--/g, 'pet__gauge--') : ''
   return (
     <div className={`pet pet--${usePose ? 'idle' : animation}`} style={{ width: size, height: size }} data-testid="pet">
       {bubble && <div className={`pet__bubble${bubbleClass ? ' ' + bubbleClass : ''}`}>{bubble}</div>}
       {gauge && !bubble && (
-        <div className="pet__gauge">
+        <div className={`pet__gauge${gaugeEdgeCls ? ' ' + gaugeEdgeCls : ''}`}>
           <div className="pet__gauge-head">
             Lv.{stage} · {generation}번째 아이
           </div>

@@ -413,3 +413,8 @@ body { background: transparent; overflow: hidden; user-select: none; }
 .pet__reminder--pinleft { left: 0; transform: translateX(0) !important; }
 .pet__reminder--pinright { left: auto; right: 0; transform: translateX(0) !important; }
 .pet__reminder--pinleft::after, .pet__reminder--pinright::after { display: none; }
+
+/* 상태 게이지 경계 보정 — 펫이 화면 상단/가장자리면 게이지가 잘리지 않게(말풍선과 동일 규칙) */
+.pet__gauge--below { top: 100%; bottom: auto; margin-top: 6px; margin-bottom: 0; }
+.pet__gauge--pinleft { left: 0; transform: translateX(0) !important; }
+.pet__gauge--pinright { left: auto; right: 0; transform: translateX(0) !important; }
