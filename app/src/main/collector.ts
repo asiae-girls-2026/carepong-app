@@ -6,9 +6,9 @@
  *  - 개발(npm run dev): <app>/resources/collector/collector.exe
  *  - 원시 CSV는 --raw-dir 로 userData/carepong_raw 에 저장(설치 폴더 오염 방지)
  *  - 수집기 첫 줄 {"event":"started"} 등 features 없는 줄은 무시. 콘솔창 안 뜸(windowsHide).
- *  - (10/27) collector.exe 는 PyInstaller onefile 이라 부트로더+파이썬 2개 프로세스로 뜬다. child.kill() 은
- *    부트로더만 죽여 파이썬(전역 키·마우스 훅 보유)이 매일 1개씩 좀비로 남았다 → 트리 종료(taskkill /T) +
- *    시작 시 같은 exe 경로의 고아 collector.exe 정리. (교수님 렉 제보 10/27)
+ *  - (10/27) collector.exe 는 PyInstaller onefile 빌드라 런처(부트로더) + 워커(Python 런타임) 2개 프로세스로 실행된다.
+ *    child.kill() 은 런처만 종료해 워커(전역 키보드·마우스 훅 보유)가 매일 1개씩 잔존 프로세스(orphan)로 누적됐다.
+ *    → 프로세스 트리 종료(taskkill /T) + 시작 시 동일 exe 경로의 잔존 프로세스 정리. (입력 지연 제보 10/27)
  */
 import { app } from 'electron'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
@@ -43,7 +43,7 @@ function exePath(): string {
     : path.join(app.getAppPath(), 'resources', 'collector', 'collector.exe')
 }
 
-/** 프로세스 트리 종료 — Windows 는 taskkill /T (부트로더+파이썬 자식 모두), 그 외는 SIGTERM. */
+/** 프로세스 트리 종료 — Windows 는 taskkill /T (런처·워커 모두), 그 외 플랫폼은 SIGTERM. */
 function killTree(pid: number): void {
   if (process.platform === 'win32') {
     const r = spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true, timeout: 5000 })
@@ -58,7 +58,7 @@ function killTree(pid: number): void {
 }
 
 /**
- * 같은 exe 경로의 collector.exe 중 내 자식이 아닌 것(고아) PID 목록. Windows 전용.
+ * 동일 exe 경로의 collector.exe 중 현재 인스턴스가 관리하지 않는 잔존 프로세스(orphan) PID 목록. Windows 전용.
  * 다른 프로그램의 collector.exe 를 오인 종료하지 않도록 ExecutablePath 를 우리 exe 와 대조한다.
  */
 export function listOrphanCollectorPids(exe: string, ownPid: number | null, out?: string): number[] {
@@ -68,7 +68,7 @@ export function listOrphanCollectorPids(exe: string, ownPid: number | null, out?
     const cmd = "Get-CimInstance Win32_Process -Filter \"Name='collector.exe'\" | ForEach-Object { \"$($_.ProcessId)`t$($_.ParentProcessId)`t$($_.ExecutablePath)\" }"
     const r = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', cmd], { windowsHide: true, timeout: 8000, encoding: 'utf8' })
     if (r.status !== 0 || typeof r.stdout !== 'string') {
-      console.warn('[collector] 고아 조회 실패 status=', r.status)
+      console.warn('[collector] 잔존 프로세스 조회 실패 status=', r.status)
       return []
     }
     text = r.stdout
@@ -79,22 +79,22 @@ export function listOrphanCollectorPids(exe: string, ownPid: number | null, out?
   const own = new Set<number>()
   if (ownPid != null) {
     own.add(ownPid)
-    for (const [pid, { ppid }] of byPid) if (ppid === ownPid) own.add(pid) // 부트로더의 파이썬 자식
+    for (const [pid, { ppid }] of byPid) if (ppid === ownPid) own.add(pid) // 현재 런처(ownPid)가 실행한 워커
   }
   return [...byPid].filter(([pid, { path: p }]) => p === want && !own.has(pid)).map(([pid]) => pid)
 }
 
-/** 앱 시작·수집기 시작 전에 이전 실행이 남긴 고아 collector.exe 를 정리한다. */
+/** 앱 시작·수집기 시작 전에 이전 실행이 남긴 잔존 collector.exe 프로세스를 정리한다. */
 export function cleanupOrphanCollectors(): number {
   let pids: number[] = []
   try {
     pids = listOrphanCollectorPids(exePath(), child?.pid ?? null)
   } catch (e) {
-    console.warn('[collector] 고아 조회 예외:', e)
+    console.warn('[collector] 잔존 프로세스 조회 예외:', e)
     return 0
   }
   for (const pid of pids) killTree(pid)
-  if (pids.length) console.warn('[collector] 고아 수집기 정리:', pids.join(','))
+  if (pids.length) console.warn('[collector] 잔존 수집기 프로세스 정리:', pids.join(','))
   return pids.length
 }
 
@@ -105,7 +105,7 @@ export function startCollector(onWindow: (w: CollectorLine) => void, windowSec =
     console.warn('[collector] exe 없음 — 감지 경로 비활성:', exe)
     return false
   }
-  cleanupOrphanCollectors() // 이전 실행·이전 버전이 남긴 좀비(전역 훅 보유) 먼저 정리
+  cleanupOrphanCollectors() // 이전 실행·이전 버전이 남긴 잔존 프로세스(전역 훅 보유)를 먼저 정리
   // 원시 CSV 저장 위치를 userData로 고정(--raw-dir) — 없으면 수집기가 exe 폴더(설치 폴더)에 쌓는 부작용
   const rawDir = path.join(app.getPath('userData'), 'carepong_raw')
   try {
@@ -142,7 +142,7 @@ export function startCollector(onWindow: (w: CollectorLine) => void, windowSec =
 export function stopCollector(): void {
   if (child) {
     const pid = child.pid
-    if (pid != null) killTree(pid) // 부트로더만 죽이던 child.kill() 대신 트리 종료
+    if (pid != null) killTree(pid) // 런처만 종료하던 child.kill() 대신 프로세스 트리 종료
     else child.kill()
     child = null
     console.log('[collector] 정지 pid=', pid)
@@ -322,7 +322,7 @@ export function scheduleCollector(
     if (shouldRun && !collectorRunning()) startCollector(onWindow)
     if (!shouldRun && collectorRunning()) stopCollector()
   }
-  cleanupOrphanCollectors() // 야간(방해금지)에 앱을 켜도 이전 좀비는 즉시 정리
+  cleanupOrphanCollectors() // 야간(방해금지)에 앱을 켜도 이전 잔존 프로세스는 즉시 정리
   tick()
   void flushRawQueue()
   setInterval(tick, 60 * 1000)
