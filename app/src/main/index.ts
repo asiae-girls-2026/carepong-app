@@ -1,7 +1,8 @@
 import { app, BrowserWindow, ipcMain, screen, Menu, Notification, Tray, nativeImage, dialog, shell } from 'electron'
 import type { UpdateInfo } from '../core/update'
 import { join } from 'path'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import {
   loadState,
@@ -414,6 +415,86 @@ ipcMain.handle('med:intake', (_e, id: number | string, intake: Parameters<typeof
 ipcMain.handle('med:intakeBatch', (_e, events: Parameters<typeof api.postMedicationIntakeBatch>[0]) => medCall(() => api.postMedicationIntakeBatch(events)))
 ipcMain.handle('med:adherence', (_e, from: string, to: string, timezone?: string) => medCall(() => api.getMedicationAdherence(from, to, timezone)))
 
+// ── 복약 회차 결과 전송(먹었어요=TAKEN / 나중에=SNOOZED) + 오프라인 큐 ──
+// 렌더러는 {serverId(user_medication_id), hhmm("HH:MM"), eventType, occurredAt} 만 넘긴다.
+// main이 today 조회로 occurrence_id 를 찾아 intake 전송. 실패·오프라인이면 큐에 쌓아 재전송(batch).
+// MISSED 는 전송하지 않는다(무응답·미실행은 서버가 판정).
+function intakeQueueFile(): string | null {
+  try { return join(app.getPath('userData'), 'carepong-med-intakes.jsonl') } catch { return null }
+}
+interface QueuedIntake { user_medication_id: number | string; occurrence_id: number; event_type: 'TAKEN' | 'SNOOZED'; client_event_id: string; occurred_at: string; scheduled_at?: string }
+function enqueueIntake(item: QueuedIntake): void {
+  const qf = intakeQueueFile()
+  if (!qf) return
+  try { appendFileSync(qf, JSON.stringify(item) + '\n') } catch { /* 저장 실패 무시 */ }
+}
+function readIntakeQueue(): QueuedIntake[] {
+  const qf = intakeQueueFile()
+  if (!qf || !existsSync(qf)) return []
+  try { return readFileSync(qf, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) } catch { return [] }
+}
+function writeIntakeQueue(items: QueuedIntake[]): void {
+  const qf = intakeQueueFile()
+  if (!qf) return
+  try { writeFileSync(qf, items.length ? items.map((i) => JSON.stringify(i)).join('\n') + '\n' : '') } catch { /* 무시 */ }
+}
+// today 응답(items[])에서 serverId + "HH:MM" 로 occurrence_id 찾기 (scheduled_at 의 시:분 매칭)
+function findOccurrence(today: { items?: { occurrence_id: number; user_medication_id: number | string; scheduled_at: string }[] }, serverId: number | string, hhmm: string): { occurrence_id: number; scheduled_at: string } | null {
+  const items = today?.items ?? []
+  for (const it of items) {
+    if (String(it.user_medication_id) !== String(serverId)) continue
+    const hm = (it.scheduled_at ?? '').slice(11, 16) // "....T09:00..." → "09:00"
+    if (hm === hhmm) return { occurrence_id: it.occurrence_id, scheduled_at: it.scheduled_at }
+  }
+  return null
+}
+// 큐에 쌓인 intake 재전송 (batch). accepted_ids 만 큐에서 제거.
+async function flushIntakeQueue(): Promise<void> {
+  const all = readIntakeQueue()
+  const q = all.filter((i) => typeof i.occurrence_id === 'number' && i.occurrence_id > 0) // occurrence 해결된 것만 batch 전송
+  if (q.length === 0) return
+  try {
+    const res = await api.postMedicationIntakeBatch(q.map((i) => ({
+      user_medication_id: i.user_medication_id,
+      occurrence_id: i.occurrence_id,
+      event_type: i.event_type,
+      client_event_id: i.client_event_id,
+      occurred_at: i.occurred_at,
+    })))
+    const accepted = new Set<string>(Array.isArray(res?.accepted_ids) ? res.accepted_ids : [])
+    // accepted 된 것만 전체 큐(all)에서 제거 — 미해결(-1) 항목은 그대로 보존
+    if (accepted.size > 0) writeIntakeQueue(all.filter((i) => !accepted.has(i.client_event_id)))
+  } catch { /* 네트워크 실패 — 큐 유지, 다음에 재시도 */ }
+}
+ipcMain.handle('med:reportIntake', async (_e, p: { serverId: number | string; hhmm: string; eventType: 'TAKEN' | 'SNOOZED'; occurredAt: string; date: string; clientEventId?: string }) => {
+  const clientEventId = p.clientEventId ?? randomUUID()
+  // 1) 오늘 회차 조회 → occurrence_id 매핑
+  let today: { items?: { occurrence_id: number; user_medication_id: number | string; scheduled_at: string }[] } | null = null
+  try { today = await api.getMedicationsToday(p.date) } catch { today = null }
+  const occ = today ? findOccurrence(today, p.serverId, p.hhmm) : null
+  if (!occ) {
+    // 회차를 못 찾음(오프라인·아직 회차 미생성 등) → 큐에 보관(occurrence_id 0 = 미해결, batch 때 서버가 거절하면 유지)
+    // occurrence_id 를 모르면 batch 로도 못 보내므로, 재전송 시 today 재조회가 필요 → 여기선 보류 큐에 raw 보관
+    enqueueIntake({ user_medication_id: p.serverId, occurrence_id: -1, event_type: p.eventType, client_event_id: clientEventId, occurred_at: p.occurredAt, scheduled_at: `${p.date}T${p.hhmm}:00` })
+    return { ok: false, queued: true, reason: 'no_occurrence' }
+  }
+  // 2) intake 전송
+  try {
+    const r = await api.postMedicationIntake(p.serverId, {
+      occurrence_id: occ.occurrence_id,
+      event_type: p.eventType,
+      client_event_id: clientEventId,
+      occurred_at: p.occurredAt,
+    })
+    void flushIntakeQueue() // 네트워크 OK → 밀린 큐도 재전송
+    return { ok: true, data: r }
+  } catch (e) {
+    // 전송 실패 → 큐에 보관(재전송은 batch)
+    enqueueIntake({ user_medication_id: p.serverId, occurrence_id: occ.occurrence_id, event_type: p.eventType, client_event_id: clientEventId, occurred_at: p.occurredAt, scheduled_at: occ.scheduled_at })
+    return { ok: false, queued: true, status: (e as { status?: number }).status ?? null }
+  }
+})
+
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
 // 중복 실행 방지(1#8) — 두 번째 실행은 종료하고 기존 창을 앞으로 가져온다
@@ -498,6 +579,7 @@ app.whenReady().then(async () => {
     console.warn('[main] api.init 실패(오프라인 진행):', (e as Error).message)
   }
   api.logEvent('app_start', null, { os: process.platform, version: app.getVersion() })
+  void flushIntakeQueue() // 앱 시작 시 밀린 복약 결과(먹었어요/나중에) 큐 재전송
   // 5분 하트비트 + 앱 상태 (호출위치표 A)
   heartbeatTimer = setInterval(() => {
     api.logEvent('heartbeat', null, {})

@@ -123,6 +123,9 @@ const careApi = {
   medIntake: (id: number | string, intake: unknown): Promise<MedResult> => ipcRenderer.invoke('med:intake', id, intake),
   medIntakeBatch: (events: unknown[]): Promise<MedResult> => ipcRenderer.invoke('med:intakeBatch', events),
   medAdherence: (from: string, to: string, timezone?: string): Promise<MedResult> => ipcRenderer.invoke('med:adherence', from, to, timezone),
+  // 먹었어요/나중에 → 서버 회차 결과 전송. main이 today 조회로 occurrence 매핑 + 오프라인 큐 관리.
+  medReportIntake: (p: { serverId: number | string; hhmm: string; eventType: 'TAKEN' | 'SNOOZED'; occurredAt: string; date: string }): Promise<{ ok: boolean; queued?: boolean; status?: number | null }> =>
+    ipcRenderer.invoke('med:reportIntake', p),
 }
 
 contextBridge.exposeInMainWorld('careApi', careApi)

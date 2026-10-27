@@ -351,6 +351,16 @@ export default function App() {
     window.petApi.setClickThrough(true)
   }
   // 알람 1건 '했어요' 처리 — 메인/대기열 공용(r로 대상 지정)
+  // 복약 회차 결과(TAKEN/SNOOZED)를 서버로 — serverId(서버 등록) 있는 약만. main이 today 매핑 + 오프라인 큐.
+  const reportMedIntake = (medId: string, slotHHMM: string | null, eventType: 'TAKEN' | 'SNOOZED'): void => {
+    const med = configRef.current.medications.find((m) => m.id === medId)
+    if (!med || med.serverId == null || !slotHHMM) return // 서버 미등록·시각 불명 → 서버 전송 생략(로컬은 그대로)
+    const d = new Date()
+    const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    void window.careApi.medReportIntake?.({
+      serverId: med.serverId, hhmm: slotHHMM, eventType, occurredAt: new Date().toISOString(), date,
+    }).catch(() => { /* 실패해도 로컬 복약 기록은 유지 — main이 큐에 보관 */ })
+  }
   const confirmOne = (r: Reminder): void => {
     log('alarm_answered', 'P02', { kind: ALARM_EVENT_KIND[r.kind], answer: 'confirm', ...alarmProps(r) })
     const now = Date.now()
@@ -361,6 +371,7 @@ export default function App() {
       intakeRef.current = slot
         ? recordMedDose(intakeRef.current, r.id, slot, now)
         : recordMed(intakeRef.current, r.id, now)
+      reportMedIntake(r.id, slot, 'TAKEN') // 먹었어요 → 서버 TAKEN
     }
     else if (r.kind === 'stretch') intakeRef.current = recordStretch(intakeRef.current, now)
     else intakeRef.current = recordRest(intakeRef.current, now)
@@ -398,6 +409,11 @@ export default function App() {
     const r = reminderRef.current
     if (!r) return
     log('alarm_answered', 'P02', { kind: ALARM_EVENT_KIND[r.kind], answer: 'later', ...alarmProps(r) })
+    if (r.kind === 'medication') {
+      const med = configRef.current.medications.find((m) => m.id === r.id)
+      const slot = med ? currentDueTime(med, Date.now(), startOfLocalDay(Date.now())) : null
+      reportMedIntake(r.id, slot, 'SNOOZED') // 나중에 → 서버 SNOOZED(행동 이력, 상태 변경 X)
+    }
     snoozeRef.current = { ...snoozeRef.current, [r.id]: Date.now() + SNOOZE_MS }
     clearReminder()
   }
@@ -421,6 +437,11 @@ export default function App() {
   }
   const snoozeExtra = (r: Reminder): void => {
     log('alarm_answered', 'P02', { kind: ALARM_EVENT_KIND[r.kind], answer: 'later', ...alarmProps(r) })
+    if (r.kind === 'medication') {
+      const med = configRef.current.medications.find((m) => m.id === r.id)
+      const slot = med ? currentDueTime(med, Date.now(), startOfLocalDay(Date.now())) : null
+      reportMedIntake(r.id, slot, 'SNOOZED')
+    }
     snoozeRef.current = { ...snoozeRef.current, [r.id]: Date.now() + SNOOZE_MS }
     removeExtra(r.alarmId as string)
   }
