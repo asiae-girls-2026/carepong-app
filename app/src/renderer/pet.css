@@ -87,7 +87,7 @@ body { background: transparent; overflow: hidden; user-select: none; }
   left: 50%;
   bottom: 62%; /* 펫 PNG 위 투명여백 보정 — 캐릭터 머리 근처로 */
   transform: translateX(-50%);
-  margin-bottom: 12px; /* 말풍선 꼬리가 펫 머리에 겹치지 않게 살짝 띄움 */
+  margin-bottom: 18px; /* 말풍선 꼬리가 펫 머리에 겹치지 않게 살짝 띄움 */
   z-index: 20; /* 펫 이미지 투명 여백에 가리지 않도록 위로 */
   max-width: 200px;
   width: max-content;
@@ -118,7 +118,7 @@ body { background: transparent; overflow: hidden; user-select: none; }
   left: 50%;
   bottom: 62%; /* 펫 머리 근처로 */
   transform: translateX(-50%);
-  margin-bottom: 12px; /* 알람 말풍선도 펫 머리에 겹치지 않게 살짝 띄움 */
+  margin-bottom: 18px; /* 알람 말풍선도 펫 머리에 겹치지 않게 살짝 띄움 */
   z-index: 20; /* 펫 이미지(투명 여백)에 버튼이 가려 클릭 안 먹는 문제 방지 — 팝업을 항상 위로 */
   width: max-content;
   max-width: 220px;
@@ -401,14 +401,14 @@ body { background: transparent; overflow: hidden; user-select: none; }
 .relief__scale button:hover { border-color: #b9aee8; background: #f1eeff; transform: translateY(-2px); }
 
 /* 말풍선 화면 경계 보정(1#7) */
-.pet__bubble--below { top: 100%; bottom: auto; margin-top: 12px; margin-bottom: 0; }
+.pet__bubble--below { top: 100%; bottom: auto; margin-top: 18px; margin-bottom: 0; }
 .pet__bubble--below::after { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: #ffffff; }
 /* transform에 !important — bubbleIn 애니메이션(both)이 translateX(-50%)로 덮어써 왼쪽 잘리던 문제 해결 */
 .pet__bubble--pinleft { left: 0; transform: translateX(0) !important; }
 .pet__bubble--pinright { left: auto; right: 0; transform: translateX(0) !important; }
 .pet__bubble--pinleft::after, .pet__bubble--pinright::after { display: none; }
 /* 알람 말풍선 경계 보정 (pet__bubble과 동일 규칙) */
-.pet__reminder--below { top: 100%; bottom: auto; margin-top: 12px; margin-bottom: 0; }
+.pet__reminder--below { top: 100%; bottom: auto; margin-top: 18px; margin-bottom: 0; }
 .pet__reminder--below::after { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: #ffffff; }
 .pet__reminder--pinleft { left: 0; transform: translateX(0) !important; }
 .pet__reminder--pinright { left: auto; right: 0; transform: translateX(0) !important; }
