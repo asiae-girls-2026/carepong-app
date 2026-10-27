@@ -11,7 +11,7 @@ import type { UpdateInfo } from '../core/update'
 import type { HealthConfig } from '../core/health'
 import { DEFAULT_HEALTH_CONFIG, DEFAULT_AUX, createMed, addMed, removeMed, updateMed } from '../core/health'
 import { EMPTY_INTAKE, recordMed, recordMedDose, medAllTakenToday, medDoseTakenToday, type IntakeLog } from '../core/intake'
-import { startOfLocalDay, currentDueTime } from '../core/scheduler'
+import { startOfLocalDay, currentDueTime, toServerRepeatDays } from '../core/scheduler'
 import { replyEmpathy } from '../core/empathy'
 import { earnsHeart } from '../core/gibberish' // 난타(자판 뭉개기) 판별 — 하트 적립 전처리(gibberish_filter.py 규칙 포팅)
 import { parseTimes, tryParseRegister, registerSummary, type ParsedTime } from '../core/medLui'
@@ -683,11 +683,71 @@ export default function ChatApp() {
     })
     window.petApi.saveConfig(addMed(config, med))
     setConfig((c) => addMed(c, med))
+    syncRegisterMed(med) // 서버 동기화(2-A) — 실패해도 로컬 등록은 유지
     return true
   }
   const logReg = (method: 'lui' | 'gui', startedAt: number | null): void => {
     if (startedAt == null) return
     setRegLogs(appendRegLog({ method, ms: Date.now() - startedAt, at: Date.now() }))
+  }
+
+  // ── 복약 2차 서버 동기화(2-A) — 로컬 등록/수정/삭제 성공 후 서버에도 반영. 실패해도 로컬은 유지(백업 성격). ──
+  const todayYMD = (): string => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+  // 로컬 약 → 서버 등록. 성공 시 응답의 user_medication_id·schedule_revision 을 로컬 약에 저장한다.
+  const syncRegisterMed = (med: { id: string; item_type?: 'DRUG' | 'HFF'; product_id?: number; times: string[]; days?: number[]; dose?: string }): void => {
+    if (med.product_id == null || !med.item_type) return // 서버는 product_id·item_type 필수 — 없으면 로컬만
+    const body = {
+      item_type: med.item_type,
+      product_id: med.product_id,
+      client_medication_id: med.id, // 로컬 UUID = 멱등 연결키
+      schedule: { times: med.times, repeat_days: toServerRepeatDays(med.days ?? []), timezone: 'Asia/Seoul' },
+      start_date: todayYMD(),
+      end_date: null as string | null,
+      dose_text: med.dose ?? null,
+    }
+    void window.careApi.medRegister?.(body).then((res) => {
+      if (res?.ok) {
+        const data = res.data as { user_medication_id?: number | string; schedule_revision?: number }
+        const sid = data?.user_medication_id
+        if (sid != null) {
+          setConfig((c) => {
+            const next = updateMed(c, med.id, { serverId: sid, scheduleRevision: data?.schedule_revision })
+            window.petApi.saveConfig(next)
+            return next
+          })
+        }
+      } else {
+        console.warn('[med] 서버 등록 실패(로컬 유지):', res?.status)
+      }
+    }).catch(() => { /* 네트워크 실패 — 로컬 유지 */ })
+  }
+  // 로컬 약 시간 수정 → 서버 PATCH(serverId 있을 때만). 응답 schedule_revision 갱신.
+  const syncPatchMed = (med: { id: string; serverId?: number | string; scheduleRevision?: number; times: string[]; days?: number[] }): void => {
+    if (med.serverId == null) { syncRegisterMed(med as never); return } // 서버 미등록이면 등록으로
+    const patch = {
+      schedule_revision: med.scheduleRevision ?? 0,
+      schedule: { times: med.times, repeat_days: toServerRepeatDays(med.days ?? []), timezone: 'Asia/Seoul' },
+    }
+    void window.careApi.medPatch?.(med.serverId, patch).then((res) => {
+      if (res?.ok) {
+        const data = res.data as { schedule_revision?: number }
+        if (data?.schedule_revision != null) {
+          setConfig((c) => {
+            const next = updateMed(c, med.id, { scheduleRevision: data.schedule_revision })
+            window.petApi.saveConfig(next)
+            return next
+          })
+        }
+      } else console.warn('[med] 서버 수정 실패(로컬 유지):', res?.status)
+    }).catch(() => { /* 로컬 유지 */ })
+  }
+  // 로컬 약 삭제 → 서버 DELETE(active=false). serverId 있을 때만.
+  const syncDeleteMed = (serverId?: number | string): void => {
+    if (serverId == null) return
+    void window.careApi.medDelete?.(serverId).catch(() => { /* 로컬 유지 */ })
   }
 
   const handleMedMessage = (text: string, thinkingId: number, started: number): void => {
@@ -775,6 +835,17 @@ export default function ChatApp() {
       })
       window.petApi.saveConfig(nextCfg)
       setConfig(nextCfg)
+      // 서버 동기화(2-A): 이름 바뀜=다른 약 → 기존 비활성 + 새 등록 / 시간만 바뀜 → PATCH
+      const updated = nextCfg.medications.find((m) => m.id === editingMedId)
+      if (updated) {
+        if (nameChanged) {
+          if (target?.serverId != null) syncDeleteMed(target.serverId)
+          // 다른 약 → 새 등록(기존 serverId는 쓰지 않음)
+          syncRegisterMed({ id: updated.id, item_type: updated.item_type, product_id: updated.product_id, times: updated.times, days: updated.days, dose: updated.dose })
+        } else {
+          syncPatchMed(updated)
+        }
+      }
       if (nameChanged) {
         // 다른 약이 됐으니 '오늘 먹음' 기록 초기화
         setIntake((prev) => {
@@ -1702,7 +1773,7 @@ export default function ChatApp() {
                           </span>
                           {confirmDelId === m.id ? (
                             <span className="mh__med-delconf">
-                              <button className="mh__med-del mh__med-del--yes" onClick={() => { persist(removeMed(config, m.id)); setConfirmDelId(null) }}>삭제</button>
+                              <button className="mh__med-del mh__med-del--yes" onClick={() => { syncDeleteMed(m.serverId); persist(removeMed(config, m.id)); setConfirmDelId(null) }}>삭제</button>
                               <button className="mh__med-del" onClick={() => setConfirmDelId(null)}>취소</button>
                             </span>
                           ) : (

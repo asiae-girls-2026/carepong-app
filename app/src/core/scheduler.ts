@@ -14,6 +14,9 @@ export interface MedSchedule {
   timing?: MedTiming // 복용 타이밍
   note?: string // 주의사항 메모 (예: "물과 함께", "자몽주스 금지")
   createdAt?: number // 등록 시각 — 이 시각 이전에 지난 시간은 발동 안 함(등록 직후 즉시 알림 방지)
+  // ── 복약 2차 서버 동기화 ──
+  serverId?: number | string // 서버 user_medication_id (등록 성공 시 저장 → 수정·삭제에 사용)
+  scheduleRevision?: number // 마지막 목록 조회값 — PATCH 시 충돌 판정(409)에 사용
 }
 
 export interface WaterConfig {
