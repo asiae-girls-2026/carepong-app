@@ -259,7 +259,7 @@ async function flushRawQueue(): Promise<void> {
             eventKinds.has(r.kind) && (r.value == null || (typeof r.value === 'number' && Number.isFinite(r.value))) &&
             (r.kind !== 'm_move' || (typeof r.value === 'number' && r.value >= 0)))
         : records.every(r => r && r.schema === 'km-raw-v1' &&
-            typeof r.window_start === 'number' && typeof r.window_sec === 'number' &&
+            typeof r.window_start === 'string' && typeof r.window_sec === 'number' &&
             r.keyboard && typeof r.keyboard === 'object' && r.mouse && typeof r.mouse === 'object')
       if (!valid) {
         console.warn('[raw-upload] ML Raw 스키마 불일치; 파일 유지:', name)
