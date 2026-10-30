@@ -1017,7 +1017,11 @@ export default function App() {
       if (reliefOpenRef.current || stressAlertRef.current || reminderRef.current) return
       stressAlertRef.current = true
       setStressAlert(true)
-      // 클릭 통과는 끄지 않는다 — 복약 알람처럼 onMove가 '팝업 위에서만' 클릭을 받게 한다(응답 전에도 다른 작업 가능, 기획 상의).
+      // 팝업이 뜨는 순간엔 클릭을 받게 시작한다(interactive ON) — 투명 영역이라 mousemove가
+      // 전달 안 되는 환경에서도 예/아니오 버튼이 확실히 눌리게. 이후 마우스가 팝업 밖으로 나가면
+      // onMove가 통과로 전환 → 다른 작업 가능(복약 알람과 동일 영역 판정, 기획 상의).
+      interactive.current = true
+      window.petApi.setClickThrough(false)
       window.petApi.raiseTop?.() // 팝업은 항상 최상단(어떤 팝업보다 우선)
       // 서버(postWindow) 응답 맥락 저장 — 자가보고(postSelfReport)에 실어 보냄 (호출위치표 B)
       promptCtxRef.current = {
