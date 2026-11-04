@@ -83,6 +83,12 @@ export type PpgWatchOutcome =
   | { kind: 'timeout'; sessionId: string }
   | { kind: 'cancelled'; sessionId: string }
   | { kind: 'error'; sessionId: string; message: string }
+// 오버레이 → 미니홈 HRV 자동 오픈 시 넘기는 자가보고 맥락(QR 파라미터로 실림)
+export interface HrvOpenCtx {
+  selfOx: 1 | 0 | null
+  selfLevel: number | null
+  trigger: 'manual' | 'overload' | 'morning'
+}
 
 const careApi = {
   searchDrug: (name: string): Promise<DrugSearchResult> => ipcRenderer.invoke('drug:search', name),
@@ -150,6 +156,13 @@ const careApi = {
     const handler = (_e: unknown, o: PpgWatchOutcome): void => cb(o)
     ipcRenderer.on('ppg:result', handler)
     return () => ipcRenderer.removeListener('ppg:result', handler)
+  },
+  // 2차 PPG — 오버레이 스트레스 제안([네])에서 미니홈 HRV 측정 자동 오픈. ctx=자가보고 맥락(QR 파라미터로 실림).
+  openHrv: (ctx: HrvOpenCtx): void => ipcRenderer.send('care:openHrv', ctx),
+  onOpenHrv: (cb: (ctx: HrvOpenCtx) => void): (() => void) => {
+    const handler = (_e: unknown, ctx: HrvOpenCtx): void => cb(ctx)
+    ipcRenderer.on('chat:openHrv', handler)
+    return () => ipcRenderer.removeListener('chat:openHrv', handler)
   },
 }
 

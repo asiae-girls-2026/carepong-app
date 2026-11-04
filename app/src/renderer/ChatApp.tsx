@@ -11,6 +11,8 @@ type HrvOutcome =
   | { kind: 'timeout'; sessionId: string }
   | { kind: 'cancelled'; sessionId: string }
   | { kind: 'error'; sessionId: string; message: string }
+// 오버레이 스트레스 제안 → 미니홈 HRV 자동 오픈 시 넘어오는 맥락
+interface HrvOpenCtx { selfOx: 1 | 0 | null; selfLevel: number | null; trigger: 'manual' | 'overload' | 'morning' }
 import type { CatalogItem } from '../core/catalog'
 import type { DrugInfo } from '../core/drugData'
 import type { Pet } from '../core/types'
@@ -539,6 +541,15 @@ export default function ChatApp() {
     window.petApi.debug('chat')
     setLocalHearts((h) => Math.min(10, Math.max(h, heartsToday) + 1))
   }
+  // 2차 PPG — 오버레이 스트레스 제안([네])에서 열린 경우: 자가보고 맥락 저장 → 리포트 탭 + HRV 모달 자동 오픈
+  useEffect(() => {
+    const off = window.careApi.onOpenHrv?.((ctx: HrvOpenCtx) => {
+      hrvCtxRef.current = { selfOx: ctx.selfOx, selfLevel: ctx.selfLevel, trigger: ctx.trigger }
+      setMode('report') // HRV 측정은 리포트 탭(업무유형 카드)에 있음
+      setHrvOpen(true)
+    })
+    return () => { off?.() }
+  }, [])
   // 2차 PPG — HRV 측정 모달이 열리면 ① session_id(uuid) 발급 → QR 생성(회원번호·펫이름·세션·트리거·자가보고 포함)
   // ② 서버 완료 감지 시작(ppgWatch) → 폰 측정 끝나면 결과 수신 → 점수·등급 표시, '고'면 완화(명상/호흡)로 유도.
   useEffect(() => {

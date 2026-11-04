@@ -395,6 +395,15 @@ ipcMain.on('pet:showContextMenu', (_e, state: { dnd: boolean; canRebirth?: boole
 ipcMain.on('care:openChat', (_e, mode: 'home' | 'med' | 'heart' | 'settings') => openChatWindow(mode))
 // 챗 창에서 '1분 쉬어가기' → 오버레이의 완화 흐름 실행
 ipcMain.on('care:relief', () => win?.webContents.send('pet:menuCommand', 'relief'))
+// 2차 PPG — 오버레이 제안("심박으로 확인해볼까요?")에서 [네] → 미니홈 열고 HRV 측정 자동 오픈.
+// 자가보고 맥락(self_ox·self_level·trigger)을 미니홈으로 전달 → QR 파라미터에 실린다.
+ipcMain.on('care:openHrv', (_e, ctx: { selfOx: 1 | 0 | null; selfLevel: number | null; trigger: string }) => {
+  openChatWindow('home') // 미니홈을 열고(이미 열려 있으면 앞으로)
+  // 창이 막 생성됐을 수 있으니, 로드 완료 후 전달 (이미 로드됐으면 즉시)
+  const send = (): void => chat?.webContents.send('chat:openHrv', ctx)
+  if (chat && !chat.webContents.isLoading()) send()
+  else chat?.webContents.once('did-finish-load', send)
+})
 
 // ── 복약 2차 서버 동기화 (docs/medication-phase2-api.md) ──
 // 렌더러에서 호출 → main(토큰 보유)이 서버로. 실패해도 로컬 UI·알림·보상은 유지(렌더러가 처리).

@@ -176,6 +176,8 @@ export default function App() {
   const [reliefRegion, setReliefRegion] = useState<CSSProperties | null>(null)
   const [reliefRoute1, setReliefRoute1] = useState(false) // Route1(감지 팝업)=1~5 선택+대화 선택지, Route2=2선택
   const [petOpacity, setPetOpacity] = useState(40) // 케어펫 투명도 %(방해금지 중) — 설정 연동
+  const [hrvOffer, setHrvOffer] = useState(false) // 2차 PPG — 1~5 자가보고 후 "심박으로 확인해볼까요?" 제안 말풍선
+  const hrvOfferCtx = useRef<{ selfOx: 1 | 0 | null; selfLevel: number | null; trigger: string | null }>({ selfOx: null, selfLevel: null, trigger: null })
 
   const lastTickAt = useRef<number>(Date.now())
   const sessionStart = useRef<number>(Date.now())
@@ -957,6 +959,25 @@ export default function App() {
     })
     // 이벤트명은 서버 허용 목록의 stress_score_answered (이전 stress_scale은 거절되어 큐에 쌓임)
     log('stress_score_answered', 'P03', { scale, window_id: reliefWindowIdRef.current })
+    // 2차 PPG — 주관(o/x·1~5) 바로 다음에 생체(HRV)를 같은 순간 재자는 흐름(명세). "확인해볼까요?" 제안.
+    // self_ox=1(예로 들어온 Route1), self_level=scale, trigger=promptType → 미니홈 HRV QR 파라미터로 전달.
+    hrvOfferCtx.current = { selfOx: 1, selfLevel: scale, trigger: reliefTriggerRef.current ?? 'overload' }
+    setHrvOffer(true)
+    window.petApi.raiseTop?.() // 제안 말풍선을 최상단으로 (버튼이 가려지지 않게)
+    window.petApi.setClickThrough(false) // 버튼이 눌리도록 클릭 받기 (네/나중에 누르면 다시 통과로 복귀)
+  }
+  // "심박으로 확인해볼까요?" — [네] → 미니홈 열고 HRV 측정 자동 오픈(자가보고 맥락 전달) / [나중에] → 닫기
+  const acceptHrvOffer = (): void => {
+    const ctx = hrvOfferCtx.current
+    setHrvOffer(false)
+    window.petApi.setClickThrough(true) // 제안 닫힘 → 다시 클릭 통과(작업 방해 X)
+    // trigger 를 측정 API 값(manual|overload|morning)으로 매핑: spike/과부하 계열 → overload, morning → morning
+    const t = ctx.trigger === 'morning' ? 'morning' : 'overload'
+    window.careApi.openHrv?.({ selfOx: ctx.selfOx, selfLevel: ctx.selfLevel, trigger: t })
+  }
+  const declineHrvOffer = (): void => {
+    setHrvOffer(false)
+    window.petApi.setClickThrough(true)
   }
   // 완화 3번째: {펫이름}과 얘기하기 — 공감챗봇 열기. 보상 없음(하트만)·상한/쿨다운 미포함(기획서 3-2)
   const chatRelief = (): void => {
@@ -1439,6 +1460,22 @@ export default function App() {
                 </button>
                 <button className="rbtn" onClick={dismissNotStressed}>
                   아니요
+                </button>
+              </div>
+            </div>
+          )}
+          {/* 2차 PPG — 1~5 자가보고 후 "심박으로 확인해볼까요?" 제안. [네]→미니홈 HRV 측정, [나중에]→닫기 */}
+          {hrvOffer && !reminder && !stressAlert && (
+            <div className={`pet__reminder pet__reminder--stress${reminderCls ? ' ' + reminderCls : ''}`} onPointerDown={(e) => e.stopPropagation()}>
+              <button className="pet__reminder-x" onClick={declineHrvOffer} aria-label="닫기">✕</button>
+              <div className="pet__reminder-text">심박으로 확인해볼까요? 💓</div>
+              <div className="pet__reminder-detail">폰으로 1분이면 돼요.<br />정말 그런지 같이 확인해요</div>
+              <div className="pet__reminder-actions">
+                <button className="rbtn rbtn--ok" onClick={acceptHrvOffer}>
+                  네
+                </button>
+                <button className="rbtn" onClick={declineHrvOffer}>
+                  나중에
                 </button>
               </div>
             </div>
