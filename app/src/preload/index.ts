@@ -68,6 +68,22 @@ export type MedResult =
   | { ok: true; data: unknown }
   | { ok: false; status: number | null; message: string }
 
+// 2차 PPG(HRV) 측정 결과 — 서버 응답(명세). 완료 감지로 받는다.
+export interface PpgResult {
+  id?: string
+  status: 'ok' | 'low_quality' | 'insufficient_beats' | 'error' | string
+  score?: number // 0~100 고부하 점수
+  grade?: '저' | '관찰' | '고' | string // 화면표시: 낮음/중간/높음
+  verdict?: 'deny' | 'observe' | 'confirm' | string
+  used_reference?: 'personal' | 'coldstart' | string
+}
+// 세션 감시 결과(결과 수신 / 타임아웃 / 취소 / 오류)
+export type PpgWatchOutcome =
+  | { kind: 'result'; sessionId: string; result: PpgResult }
+  | { kind: 'timeout'; sessionId: string }
+  | { kind: 'cancelled'; sessionId: string }
+  | { kind: 'error'; sessionId: string; message: string }
+
 const careApi = {
   searchDrug: (name: string): Promise<DrugSearchResult> => ipcRenderer.invoke('drug:search', name),
   openChat: (mode?: 'med' | 'heart' | 'settings'): void => ipcRenderer.send('care:openChat', mode ?? 'heart'),
@@ -126,6 +142,15 @@ const careApi = {
   // 먹었어요/나중에 → 서버 회차 결과 전송. main이 today 조회로 occurrence 매핑 + 오프라인 큐 관리.
   medReportIntake: (p: { serverId: number | string; hhmm: string; eventType: 'TAKEN' | 'SNOOZED'; occurredAt: string; date: string }): Promise<{ ok: boolean; queued?: boolean; status?: number | null }> =>
     ipcRenderer.invoke('med:reportIntake', p),
+  // ── 2차 PPG(HRV) 측정 완료 감지 (src/main/ppg.ts) ──
+  // QR 띄울 때 session_id 로 감시 시작 → 측정 끝나면 onPpgResult 로 결과 1회 수신(SSE, 폴백 폴링).
+  ppgWatch: (sessionId: string): void => ipcRenderer.send('ppg:watch', sessionId),
+  ppgCancel: (sessionId: string): void => ipcRenderer.send('ppg:cancel', sessionId),
+  onPpgResult: (cb: (o: PpgWatchOutcome) => void): (() => void) => {
+    const handler = (_e: unknown, o: PpgWatchOutcome): void => cb(o)
+    ipcRenderer.on('ppg:result', handler)
+    return () => ipcRenderer.removeListener('ppg:result', handler)
+  },
 }
 
 contextBridge.exposeInMainWorld('careApi', careApi)

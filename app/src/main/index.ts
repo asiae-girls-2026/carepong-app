@@ -19,6 +19,7 @@ import { initStressManager } from './stress'
 import { initDrugSearch } from './drugSearch'
 import { setCollectorCpNumber } from './collector'
 import * as api from './api'
+import { watchSession as ppgWatchSession, cancelSession as ppgCancelSession, cancelAllSessions as ppgCancelAll } from './ppg'
 
 // 펫 상태 백업 매핑 (호출위치표 E: putPet) — 누적 하트로 가구 단계 산출(기획서 방꾸미기 언락 임계)
 const FURNITURE_THRESHOLDS = [10, 30, 60, 100, 150, 210, 280, 340, 400]
@@ -495,6 +496,17 @@ ipcMain.handle('med:reportIntake', async (_e, p: { serverId: number | string; hh
   }
 })
 
+// ── 2차 PPG(HRV) 완료 감지 (src/main/ppg.ts) ──
+// 렌더러(미니홈)가 QR을 띄울 때 session_id 로 감시 시작을 요청 → 서버가 측정 끝내면 결과를 그 창으로 push.
+// 결과/타임아웃/취소/오류는 'ppg:result' 로 한 번 돌려준다. 공감챗봇·이벤트 서버(api.ts)와 무관한 독립 서버.
+ipcMain.on('ppg:watch', (e, sessionId: string) => {
+  const wc = e.sender // 요청한 창(미니홈)으로 결과를 돌려준다
+  ppgWatchSession(sessionId, (outcome) => {
+    if (!wc.isDestroyed()) wc.send('ppg:result', outcome)
+  })
+})
+ipcMain.on('ppg:cancel', (_e, sessionId: string) => ppgCancelSession(sessionId))
+
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
 // 중복 실행 방지(1#8) — 두 번째 실행은 종료하고 기존 창을 앞으로 가져온다
@@ -597,6 +609,7 @@ app.whenReady().then(async () => {
 
 // 종료 직전: 남은 이벤트 묶어 전송 (호출위치표 A)
 app.on('before-quit', async (e) => {
+  ppgCancelAll() // 진행 중인 HRV 측정 감시(SSE·폴링) 정리
   if (heartbeatTimer) {
     clearInterval(heartbeatTimer)
     heartbeatTimer = null

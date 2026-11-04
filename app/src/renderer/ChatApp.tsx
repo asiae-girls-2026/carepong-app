@@ -4,6 +4,13 @@
 // 공감 응답: 서버 /chat(Bedrock, 10/14 1차 연동) → 실패 시 core/empathy.ts 규칙 응답 폴백. 위기 키워드는 서버에 안 보냄. 약설명은 규칙 기반(core/drugData.ts)
 import { Fragment, useEffect, useRef, useState, type FormEvent } from 'react'
 import QRCode from 'qrcode' // 2차 PPG — HRV 측정 QR 생성(오프라인). npm i qrcode 필요
+// 2차 PPG(HRV) 측정 결과·완료감지 타입 (preload 브리지와 동일 형태 — 창 간 전달용 로컬 선언)
+interface HrvResult { id?: string; status: string; score?: number; grade?: string; verdict?: string; used_reference?: string }
+type HrvOutcome =
+  | { kind: 'result'; sessionId: string; result: HrvResult }
+  | { kind: 'timeout'; sessionId: string }
+  | { kind: 'cancelled'; sessionId: string }
+  | { kind: 'error'; sessionId: string; message: string }
 import type { CatalogItem } from '../core/catalog'
 import type { DrugInfo } from '../core/drugData'
 import type { Pet } from '../core/types'
@@ -397,7 +404,13 @@ export default function ChatApp() {
   const [wtStep, setWtStep] = useState<number | 'result' | null>(null) // null=닫힘
   const [wtAnswers, setWtAnswers] = useState<WtLetter[]>([])
   const [wtDone, setWtDone] = useState(false) // 설문 1회 완료 → 리포트 카드가 결과(과 공개) 상태로
-  const [hrvOpen, setHrvOpen] = useState(false) // HRV 측정 모달(QR) — UI만, 로직 추후
+  const [hrvOpen, setHrvOpen] = useState(false) // HRV 측정 모달(QR)
+  // HRV 측정 진행 단계 — waiting(QR 띄우고 폰 측정 대기) → result(결과 수신) / timeout(무응답·만료)
+  const [hrvPhase, setHrvPhase] = useState<'waiting' | 'result' | 'timeout'>('waiting')
+  const [hrvResult, setHrvResult] = useState<HrvResult | null>(null)
+  const hrvSessionRef = useRef<string | null>(null) // 이번 측정 세션 id(uuid) — 완료 통지 매칭·취소용
+  // 스트레스 팝업(P03)에서 넘어온 자가보고 맥락 — QR 파라미터(self_ox·self_level·trigger)에 실어 보낸다.
+  const hrvCtxRef = useRef<{ selfOx?: 0 | 1 | null; selfLevel?: number | null; trigger?: 'manual' | 'overload' | 'morning' }>({})
   // 리포트 복약 집계 — 리포트 탭 진입 시 getMedicationAdherence(이번 달)로 채움. null=미조회
   const [adherence, setAdherence] = useState<{
     totals?: { taken?: number; missed?: number; scheduled?: number; adherence_rate?: number | null }
@@ -526,17 +539,41 @@ export default function ChatApp() {
     window.petApi.debug('chat')
     setLocalHearts((h) => Math.min(10, Math.max(h, heartsToday) + 1))
   }
-  // 2차 PPG — HRV 측정 모달이 열리면 사용자별 QR 생성(회원번호·펫이름 자동 포함, 오프라인 동작)
+  // 2차 PPG — HRV 측정 모달이 열리면 ① session_id(uuid) 발급 → QR 생성(회원번호·펫이름·세션·트리거·자가보고 포함)
+  // ② 서버 완료 감지 시작(ppgWatch) → 폰 측정 끝나면 결과 수신 → 점수·등급 표시, '고'면 완화(명상/호흡)로 유도.
   useEffect(() => {
     if (!hrvOpen) return
     const canvas = qrCanvasRef.current
     if (!canvas) return
     const cpId = config.memberId ?? ''
     const nm = pet?.name ?? '퐁이'
-    const url = `https://carepong-ppg-web.vercel.app/?user=${cpId}&pet=${encodeURIComponent(nm)}`
+    // 세션 발급 — QR마다 고유(동시 측정·중복 매칭 방지). 모달 1회 열림당 1개.
+    const session = (globalThis.crypto?.randomUUID?.() ?? `s-${Date.now()}-${Math.random().toString(16).slice(2)}`)
+    hrvSessionRef.current = session
+    setHrvPhase('waiting')
+    setHrvResult(null)
+    // 자가보고 맥락(스트레스 팝업에서 넘어온 경우) — 없으면 수동 측정(manual)
+    const ctx = hrvCtxRef.current || {}
+    const trigger = ctx.trigger ?? 'manual'
+    const params = new URLSearchParams({ user: cpId, pet: nm, session, trigger })
+    if (ctx.selfOx === 0 || ctx.selfOx === 1) params.set('self_ox', String(ctx.selfOx))
+    if (typeof ctx.selfLevel === 'number') params.set('self_level', String(ctx.selfLevel))
+    const url = `https://carepong-ppg-web.vercel.app/?${params.toString()}`
     QRCode.toCanvas(canvas, url, { width: 150, margin: 1 }, (err) => {
       if (err) console.error('QR 생성 실패', err)
     })
+    // 완료 감지 시작 + 결과 1회 수신
+    window.careApi.ppgWatch(session)
+    const off = window.careApi.onPpgResult((o: HrvOutcome) => {
+      if (o.sessionId !== session) return // 다른 세션 결과 무시
+      if (o.kind === 'result') { setHrvResult(o.result); setHrvPhase('result') }
+      else if (o.kind === 'timeout') setHrvPhase('timeout')
+      // cancelled/error 는 모달이 이미 닫혔거나 재시도 흐름이라 화면 유지
+    })
+    return () => {
+      off()
+      window.careApi.ppgCancel(session) // 모달 닫힘·재오픈 시 이전 감시 정리
+    }
   }, [hrvOpen, config.memberId, pet?.name])
   // 리포트 탭 진입 시 이번 달 복약 집계 조회 → 달력 복약 점·월 복약률·연속 복약 실데이터
   useEffect(() => {
@@ -1668,7 +1705,7 @@ export default function ChatApp() {
                       <div className="mh__type-stage">
                         {/* 동물 확정 전 — 미스터리 박스(도감 에셋 재사용). 리듬·HRV 해금되면 최종 캐릭터로 교체 예정 */}
                         <img className="mh__type-face mh__type-face--myst" src={dexImg('mystery')} alt="아직 미공개" draggable={false} />
-                        <button type="button" className="mh__hrv-btn" onClick={() => setHrvOpen(true)}>💓<br />HRV<br />측정</button>
+                        <button type="button" className="mh__hrv-btn" onClick={() => { hrvCtxRef.current = { trigger: 'manual' }; setHrvOpen(true) }}>💓<br />HRV<br />측정</button>
                       </div>
                     </>
                   ) : (
@@ -1968,17 +2005,70 @@ export default function ChatApp() {
         </div>
       )}
 
-      {/* ── HRV 측정 모달(QR) — UI 껍데기, QR·측정 로직 추후 ── */}
+      {/* ── HRV 측정 모달(QR) — waiting(QR·측정 대기) → result(점수·등급) / timeout(재시도) ── */}
       {hrvOpen && (
         <div className="mh__wt-dim" onClick={() => setHrvOpen(false)}>
           <div className="mh__hrv-modal" role="dialog" aria-label="HRV 측정" onClick={(e) => e.stopPropagation()}>
             <button type="button" className="mh__wt-x" onClick={() => setHrvOpen(false)} aria-label="닫기">✕</button>
-            {/* QR 자리 — 추후 실제 QR 삽입 */}
-            <canvas ref={qrCanvasRef} className="mh__hrv-qr" width={150} height={150} aria-label="HRV 측정 QR 코드" />
-            <div className="mh__hrv-title">폰 카메라로 QR을 찍어주세요</div>
-            <p className="mh__hrv-sub">손끝을 카메라에 1분간 · 끝나면<br />워크타입 네 번째 글자에 가까워져요</p>
-            <div className="mh__hrv-count">측정 2/4회 · 하루 최대 2회</div>
-            <button type="button" className="mh__wt-done mh__hrv-close" onClick={() => setHrvOpen(false)}>닫기</button>
+
+            {/* QR 캔버스는 항상 렌더(생성 effect가 참조) — waiting 외에는 숨김 */}
+            <canvas ref={qrCanvasRef} className="mh__hrv-qr" width={150} height={150} aria-label="HRV 측정 QR 코드" style={hrvPhase === 'waiting' ? undefined : { display: 'none' }} />
+
+            {hrvPhase === 'waiting' && (
+              <>
+                <div className="mh__hrv-title">폰 카메라로 QR을 찍어주세요</div>
+                <p className="mh__hrv-sub">손끝을 카메라에 1분간 · 측정이 끝나면<br />여기 결과가 자동으로 떠요</p>
+                <div className="mh__hrv-count">하루 최대 3회 · 90분 간격</div>
+                <button type="button" className="mh__wt-done mh__hrv-close" onClick={() => setHrvOpen(false)}>닫기</button>
+              </>
+            )}
+
+            {hrvPhase === 'result' && (() => {
+              // 서버 등급(저/관찰/고) → 화면표시(낮음/중간/높음). 품질 불량이면 재측정 안내.
+              const g = hrvResult?.grade
+              const ok = hrvResult?.status === 'ok'
+              const lowQuality = hrvResult?.status === 'low_quality' || hrvResult?.status === 'insufficient_beats'
+              const label = g === '고' ? '높음' : g === '관찰' ? '중간' : g === '저' ? '낮음' : '측정됨'
+              // 등급 색은 인라인으로(미수정 chat.css에서도 바로 보이게): 낮음 초록·중간 주황·높음 빨강
+              const gradeColor = g === '고' ? '#d7514a' : g === '관찰' ? '#e0894b' : g === '저' ? '#3fa66a' : '#8a6a2a'
+              return lowQuality ? (
+                <>
+                  <div className="mh__hrv-title">신호가 약했어요</div>
+                  <p className="mh__hrv-sub">손끝을 카메라에 꼭 붙이고<br />한 번만 더 재볼까요?</p>
+                  <button type="button" className="mh__wt-done" onClick={() => { setHrvPhase('waiting'); setHrvOpen(false); setTimeout(() => setHrvOpen(true), 60) }}>다시 측정</button>
+                  <button type="button" className="mh__wt-retry mh__hrv-close" onClick={() => setHrvOpen(false)}>닫기</button>
+                </>
+              ) : (
+                <>
+                  <div className="mh__hrv-grade" style={{ fontSize: 32, fontWeight: 800, color: gradeColor, margin: '6px 0 2px' }}>{label}</div>
+                  <p className="mh__hrv-sub">
+                    {g === '고' ? '몸도 많이 눌렸네요. 잠깐 같이 쉬어갈까요?'
+                      : g === '관찰' ? '조금 긴장한 것 같아요. 숨 한 번 고를까요?'
+                      : ok ? '몸은 괜찮아 보여요. 지금 리듬 좋아요!'
+                      : '측정을 마쳤어요.'}
+                  </p>
+                  {(g === '고' || g === '관찰') ? (
+                    <>
+                      <button type="button" className="mh__wt-done" onClick={() => { setHrvOpen(false); window.careApi.openRelief() }}>
+                        {g === '고' ? '명상·호흡으로 쉬어가기' : '1분 호흡하기'}
+                      </button>
+                      <button type="button" className="mh__wt-retry mh__hrv-close" onClick={() => setHrvOpen(false)}>나중에</button>
+                    </>
+                  ) : (
+                    <button type="button" className="mh__wt-done mh__hrv-close" onClick={() => setHrvOpen(false)}>확인</button>
+                  )}
+                </>
+              )
+            })()}
+
+            {hrvPhase === 'timeout' && (
+              <>
+                <div className="mh__hrv-title">측정이 안 들어왔어요</div>
+                <p className="mh__hrv-sub">QR을 다시 찍어 1분 측정을<br />마치면 결과가 떠요</p>
+                <button type="button" className="mh__wt-done" onClick={() => { setHrvOpen(false); setTimeout(() => setHrvOpen(true), 60) }}>다시 측정</button>
+                <button type="button" className="mh__wt-retry mh__hrv-close" onClick={() => setHrvOpen(false)}>닫기</button>
+              </>
+            )}
           </div>
         </div>
       )}
