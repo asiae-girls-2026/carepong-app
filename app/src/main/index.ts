@@ -424,6 +424,11 @@ ipcMain.handle('med:today', (_e, date: string, timezone?: string) => medCall(() 
 ipcMain.handle('med:intake', (_e, id: number | string, intake: Parameters<typeof api.postMedicationIntake>[1]) => medCall(() => api.postMedicationIntake(id, intake)))
 ipcMain.handle('med:intakeBatch', (_e, events: Parameters<typeof api.postMedicationIntakeBatch>[0]) => medCall(() => api.postMedicationIntakeBatch(events)))
 ipcMain.handle('med:adherence', (_e, from: string, to: string, timezone?: string) => medCall(() => api.getMedicationAdherence(from, to, timezone)))
+// 복약 LUI 채팅 (연우 preload 채널명 medchat:*). 반환은 medCall 래퍼 그대로.
+ipcMain.handle('medchat:message', (_e, body: Parameters<typeof api.medChatMessage>[0]) => medCall(() => api.medChatMessage(body)))
+ipcMain.handle('medchat:selection', (_e, body: Parameters<typeof api.medChatSelection>[0]) => medCall(() => api.medChatSelection(body)))
+ipcMain.handle('medchat:confirm', (_e, body: Parameters<typeof api.medChatConfirm>[0]) => medCall(() => api.medChatConfirm(body)))
+ipcMain.handle('medchat:cancel', (_e, body: Parameters<typeof api.medChatCancel>[0]) => medCall(() => api.medChatCancel(body)))
 
 // ── 복약 회차 결과 전송(먹었어요=TAKEN / 나중에=SNOOZED) + 오프라인 큐 ──
 // 렌더러는 {serverId(user_medication_id), hhmm("HH:MM"), eventType, occurredAt} 만 넘긴다.

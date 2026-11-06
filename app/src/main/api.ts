@@ -407,3 +407,18 @@ export const postMedicationIntakeBatch = (
 /** 기간별 복약 집계(리포트). 복약률 = TAKEN/(TAKEN+MISSED), UNKNOWN·미판정 SCHEDULED 제외. */
 export const getMedicationAdherence = (from: string, to: string, timezone = 'Asia/Seoul'): Promise<any> =>
   call('GET', `${V}/users/me/medication-adherence?from=${from}&to=${to}&timezone=${encodeURIComponent(timezone)}`)
+
+// ── 복약 LUI(자연어 등록) 채팅 — 정화 medication_chat.py (서버 Bearer 토큰 필수, raw_auth) ──
+// 응답 공통: { conversation_id, status, intent, response_type: 'text'|'options', message, options[], answer?, schedule? }
+// status: NEED_INTENT | NEED_PRODUCT_NAME | SELECTING_PRODUCTS | NEED_TIME | NEED_DAYS | READY_FOR_CONFIRMATION | COMPLETED | CANCELLED
+export const medChatMessage = (body: { message: string; conversation_id?: string | null }): Promise<any> =>
+  call('POST', `${V}/medication-chat/messages`, body, { timeoutMs: 20000 }) // Bedrock 호출 포함 → 기본 5초론 부족
+export const medChatSelection = (body: {
+  conversation_id: string
+  product_id?: number | null
+  user_medication_id?: number | null
+}): Promise<any> => call('POST', `${V}/medication-chat/selections`, body, { timeoutMs: 20000 })
+export const medChatConfirm = (body: { conversation_id: string }): Promise<any> =>
+  call('POST', `${V}/medication-chat/confirm`, body, { timeoutMs: 20000 })
+export const medChatCancel = (body: { conversation_id: string }): Promise<any> =>
+  call('POST', `${V}/medication-chat/cancel`, body)
