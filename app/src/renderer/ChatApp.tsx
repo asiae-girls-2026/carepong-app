@@ -13,6 +13,21 @@ type HrvOutcome =
   | { kind: 'error'; sessionId: string; message: string }
 // 오버레이 스트레스 제안 → 미니홈 HRV 자동 오픈 시 넘어오는 맥락
 interface HrvOpenCtx { selfOx: 1 | 0 | null; selfLevel: number | null; trigger: 'manual' | 'overload' | 'morning' }
+// ── 복약 LUI(자연어 등록) 대화 타입 (preload MedChat* 와 동일 형태 — 창 간 의존 피해 로컬 선언) ──
+interface MedChatOption { id: string; label: string; description?: string }
+interface MedChatSchedule { times?: string[]; repeat_days?: number[]; repeat_day_labels?: string[]; dose_text?: string | null }
+interface MedChatReply {
+  conversation_id: string
+  status: string
+  intent?: string
+  response_type?: string
+  message: string
+  options?: MedChatOption[]
+  time_suggestions?: string[]
+  repeat_day_options?: { label: string; repeat_days: number[] }[]
+  schedule?: MedChatSchedule
+}
+type MedChatResult = { ok: true; data: MedChatReply } | { ok: false; status: number | null; message: string }
 import type { CatalogItem } from '../core/catalog'
 import type { DrugInfo } from '../core/drugData'
 import type { Pet } from '../core/types'
@@ -23,7 +38,7 @@ import { EMPTY_INTAKE, recordMed, recordMedDose, medAllTakenToday, medDoseTakenT
 import { startOfLocalDay, currentDueTime, toServerRepeatDays } from '../core/scheduler'
 import { replyEmpathy } from '../core/empathy'
 import { earnsHeart } from '../core/gibberish' // 난타(자판 뭉개기) 판별 — 하트 적립 전처리(gibberish_filter.py 규칙 포팅)
-import { parseTimes, tryParseRegister, registerSummary, type ParsedTime } from '../core/medLui'
+import { type ParsedTime } from '../core/medLui'
 import { normalizeAncestors, xpProgress, isMaxed } from '../core/progression'
 import { spriteUrl, poseUrl, roomBgFor, hasPoses, dexImg, creatureScale } from './sprites'
 
@@ -66,6 +81,13 @@ interface ChatMessage {
   regProduct?: CatalogItem // 후보 선택 후 시간입력 폼이 등록할 제품
   ts?: number // 작성 시각(ms) — 마음관리 대화 24시간 로컬 보관·만료 판정용. 저장 메시지에만 채움
   mood?: boolean // 기분 체크 문답(오늘 기분:…)은 서버 history·보관에서 제외하기 위한 표시
+  // ── 복약 LUI(자연어 등록) 대화 — 서버 status 에 따라 말풍선 안에 뜨는 선택 UI ──
+  luiProducts?: MedChatOption[] // SELECTING_PRODUCTS: 제품 후보
+  luiTimes?: string[] // NEED_TIME: 시간 제안 + 직접 입력
+  luiDayOptions?: { label: string; repeat_days: number[] }[] // NEED_DAYS: 매일·평일 등 빠른 선택
+  luiNeedDays?: boolean // NEED_DAYS: 월~일 다중선택 UI 표시
+  luiConfirm?: MedChatSchedule // READY_FOR_CONFIRMATION: 확인 카드(시간·요일·제품)
+  luiProductLabel?: string // 확인 카드에 보여줄 제품명
 }
 
 type QuickAction = 'reg' | 'ask' | 'reg-lui' | 'reg-gui' | 'home' | 'edit-time' | 'edit-drug'
@@ -393,6 +415,9 @@ export default function ChatApp() {
   const [diaryPage, setDiaryPage] = useState(0)
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
   const [selectedProduct, setSelectedProduct] = useState<CatalogItem | null>(null)
+  // 복약 LUI(자연어 등록) 대화 — 진행 중 conversation_id(제품선택~확인까지 동일 id 유지). 없으면 새 대화.
+  const luiConvRef = useRef<string | null>(null)
+  const [luiDays, setLuiDays] = useState<number[]>([]) // NEED_DAYS 월~일 다중선택(0=월 … 6=일)
   const [searchStatus, setSearchStatus] = useState('')
   const [searchRevision, setSearchRevision] = useState(0)
   const [sName, setSName] = useState('') // 설정 탭 약 등록 폼
@@ -530,6 +555,19 @@ export default function ChatApp() {
         [t]: prev[t].map((m) => (m.id === thinkingId ? { ...m, ...reply, thinking: false, ts: m.ts ?? Date.now() } : m)),
       }))
     }, wait)
+  }
+  // '생각 중…' 거품을 띄우고 그 id·시작시각을 돌려준다(LUI 등 비동기 응답 대기용).
+  const pushThinking = (): { thinkingId: number; started: number } => {
+    const started = Date.now()
+    const thinkingId = push({ role: 'pet', text: '', thinking: true })
+    return { thinkingId, started }
+  }
+  // 서버에 등록된 복약(LUI confirm 결과 등)을 로컬 설정에 반영 — 알림·목록이 최신이 되도록 config 재로딩.
+  const refreshMedList = async (): Promise<void> => {
+    try {
+      const cfg = await window.petApi.loadConfig()
+      setConfig(cfg)
+    } catch { /* 로컬 반영 실패해도 서버 등록은 유효 — 다음 로드 때 반영 */ }
   }
 
   const todayKey = Math.floor(Date.now() / 86400000)
@@ -832,36 +870,91 @@ export default function ChatApp() {
       )
       return
     }
-    // '유산균 아침 등록'처럼 등록 의도면 약 이름만 뽑아 검색(시간 지정은 후보 선택 후 폼에서)
-    const parsed = tryParseRegister(text)
-    const query = parsed?.name?.trim() || text
-    // 약 이름으로 검색 → 후보를 대화 안에서 보여주고, 선택하면 약지도 안에서 바로 등록
+    // ── 복약 LUI(자연어 등록): 문장 전체를 서버로 보내 파싱·되묻기(제품/시간/요일) → 확인 → 등록 ──
+    // 진행 중 대화면 같은 conversation_id 로 이어서 보낸다(시간·요일 답도 /messages 로 전송 — 정화님 지시).
+    void sendLuiMessage(text, thinkingId, started)
+  }
+  // 서버 LUI 응답(MedChatReply) → 말풍선 메시지로 변환해 push. status 별로 선택 UI 필드를 채운다.
+  const renderLuiReply = (r: MedChatReply): Omit<ChatMessage, 'id'> => {
+    const base: Omit<ChatMessage, 'id'> = { role: 'pet', text: r.message || '…' }
+    if (r.status === 'SELECTING_PRODUCTS' && r.options?.length) {
+      return { ...base, luiProducts: r.options }
+    }
+    if (r.status === 'NEED_TIME') {
+      return { ...base, luiTimes: r.time_suggestions ?? ['07:00', '08:00', '09:00'] }
+    }
+    if (r.status === 'NEED_DAYS') {
+      return { ...base, luiNeedDays: true, luiDayOptions: r.repeat_day_options ?? [] }
+    }
+    if (r.status === 'READY_FOR_CONFIRMATION') {
+      // schedule 의 제품명은 message 에 들어있어 그대로 노출. 확인 카드로 [알림 등록]/[취소]
+      return { ...base, luiConfirm: r.schedule ?? {}, luiProductLabel: r.message }
+    }
+    // DONE/CANCELLED/기타 → 메시지만
+    return base
+  }
+  // LUI 서버 응답 처리 공통 — conversation_id 갱신 + 메시지 변환. 실패 시 폴백 안내.
+  const handleLuiResult = (res: MedChatResult, thinkingId: number, started: number): void => {
+    if (!res.ok) {
+      resolveThinking(thinkingId, { role: 'pet', text: '앗, 지금 등록 도우미 연결이 원활하지 않아요. 잠시 후 다시 시도해 주세요!' }, started)
+      return
+    }
+    luiConvRef.current = res.data.conversation_id // 다음 단계도 같은 대화로 이어가기
+    // 서버 종료 상태(COMPLETED/CANCELLED) → 대화 종료, 새 등록은 새 conversation_id 로
+    if (res.data.status === 'COMPLETED' || res.data.status === 'CANCELLED') luiConvRef.current = null
+    resolveThinking(thinkingId, renderLuiReply(res.data), started)
+  }
+  // 자연어 문장(또는 시간·요일 답) 전송 — 진행 중 대화면 conversation_id 포함
+  const sendLuiMessage = (message: string, thinkingId: number, started: number): void => {
     window.careApi
-      .searchDrug(query)
+      .medChatMessage(message, luiConvRef.current ?? undefined)
+      .then((res) => handleLuiResult(res, thinkingId, started))
+      .catch(() => resolveThinking(thinkingId, { role: 'pet', text: '앗, 지금 정보를 가져오는 데 문제가 생겼어요. 잠시 후 다시 시도해 주세요!' }, started))
+  }
+  // 제품 후보 선택 → /selections. 이후 서버가 NEED_TIME/NEED_DAYS/확인 중 하나로 응답.
+  const luiSelectProduct = (msgId: number, opt: MedChatOption): void => {
+    setFeeds((prev) => ({ ...prev, med: prev.med.map((m) => (m.id === msgId ? { ...m, luiProducts: undefined } : m)) }))
+    push({ role: 'user', text: opt.label })
+    const conv = luiConvRef.current
+    if (!conv) return
+    const { thinkingId, started } = pushThinking()
+    // 서버는 product_id 를 정수로만 받는다(문자열이면 422). 숫자로 변환해 전송.
+    const pid = Number(opt.id)
+    window.careApi
+      .medChatSelect(conv, Number.isFinite(pid) ? pid : opt.id)
+      .then((res) => handleLuiResult(res, thinkingId, started))
+      .catch(() => resolveThinking(thinkingId, { role: 'pet', text: '앗, 선택을 처리하지 못했어요. 다시 골라주실래요?' }, started))
+  }
+  // 시간·요일 답을 문장으로 /messages 전송(정화님 지시) — 버튼/직접입력 공용
+  const luiReply = (msgId: number, text: string, clearField: 'luiTimes' | 'luiNeedDays'): void => {
+    setFeeds((prev) => ({ ...prev, med: prev.med.map((m) => (m.id === msgId ? { ...m, [clearField]: undefined, luiDayOptions: undefined } : m)) }))
+    push({ role: 'user', text })
+    const { thinkingId, started } = pushThinking()
+    void sendLuiMessage(text, thinkingId, started)
+  }
+  // 최종 확인 [알림 등록] → /confirm → 등록 완료. 기존 로컬 복약 목록·알림과도 동기화되게 목록 새로고침 유도.
+  const luiConfirm = (msgId: number): void => {
+    setFeeds((prev) => ({ ...prev, med: prev.med.map((m) => (m.id === msgId ? { ...m, luiConfirm: undefined } : m)) }))
+    const conv = luiConvRef.current
+    if (!conv) return
+    push({ role: 'user', text: '알림 등록' })
+    const { thinkingId, started } = pushThinking()
+    window.careApi
+      .medChatConfirm(conv)
       .then((res) => {
-        if (res.error) {
-          resolveThinking(thinkingId, { role: 'pet', text: res.error }, started)
-        } else if (res.items.length > 0) {
-          resolveThinking(
-            thinkingId,
-            {
-              role: 'pet',
-              text: `‘${query}’ 검색 결과예요. 등록할 약을 골라주세요 💊`,
-              candidates: res.items,
-            },
-            started,
-          )
-        } else {
-          resolveThinking(
-            thinkingId,
-            { role: 'pet', text: '으음, 그 약은 아직 못 찾았어요… 정확한 약 이름으로 다시 물어봐 주실래요?' },
-            started,
-          )
-        }
+        luiConvRef.current = null // 확인했으니 대화 종료
+        if (!res.ok) { resolveThinking(thinkingId, { role: 'pet', text: '앗, 등록을 마치지 못했어요. 잠시 후 다시 시도해 주세요.' }, started); return }
+        resolveThinking(thinkingId, { role: 'pet', text: res.data.message || '등록했어요! 제가 시간 맞춰 알려드릴게요 💊' }, started)
+        void refreshMedList() // 서버 등록분을 로컬 목록·알림에 반영
       })
-      .catch(() =>
-        resolveThinking(thinkingId, { role: 'pet', text: '앗, 지금 정보를 가져오는 데 문제가 생겼어요. 잠시 후 다시 시도해 주세요!' }, started),
-      )
+      .catch(() => resolveThinking(thinkingId, { role: 'pet', text: '앗, 등록 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.' }, started))
+  }
+  const luiCancel = (msgId: number): void => {
+    setFeeds((prev) => ({ ...prev, med: prev.med.map((m) => (m.id === msgId ? { ...m, luiConfirm: undefined } : m)) }))
+    const conv = luiConvRef.current
+    luiConvRef.current = null
+    if (conv) void window.careApi.medChatCancel(conv)
+    push({ role: 'pet', text: '등록을 취소했어요. 다시 등록하려면 약 이름과 시간을 말해주세요!' })
   }
   // 설정 '수정' 클릭 → 그 약을 수정 대상으로 잡고 약지도로 이동(이동 후 자동 검색은 useEffect)
   const startEditMed = (medId: string): void => {
@@ -1489,6 +1582,77 @@ export default function ChatApp() {
                               >
                                 💊 {m.regProduct.product_name} 등록
                               </button>
+                            </div>
+                          )}
+                          {/* ── 복약 LUI: 제품 후보 선택(서버 SELECTING_PRODUCTS) ── */}
+                          {m.luiProducts && !m.thinking && (
+                            <ul className="mh__cand mh__cand--inmsg" aria-label="약 제품 선택">
+                              {m.luiProducts.map((opt) => (
+                                <li key={opt.id}>
+                                  <button type="button" onClick={() => luiSelectProduct(m.id, opt)}>
+                                    {opt.label}
+                                    {opt.description && (<><br /><small>{opt.description}</small></>)}
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {/* ── 복약 LUI: 시간 선택(서버 NEED_TIME) — 제안 버튼 + 직접 입력 ── */}
+                          {m.luiTimes && !m.thinking && (
+                            <div className="mh__guiform mh__guiform--inmsg">
+                              <div className="mh__lui-chips">
+                                {m.luiTimes.map((t) => (
+                                  <button key={t} type="button" className="mh__lui-chip" onClick={() => luiReply(m.id, t, 'luiTimes')}>
+                                    {t}
+                                  </button>
+                                ))}
+                              </div>
+                              <span className="mh__lui-hint">원하는 시각을 직접 입력해도 돼요 (예: 7시 30분)</span>
+                            </div>
+                          )}
+                          {/* ── 복약 LUI: 요일 선택(서버 NEED_DAYS) — 빠른 선택 + 월~일 다중선택 ── */}
+                          {m.luiNeedDays && !m.thinking && (
+                            <div className="mh__guiform mh__guiform--inmsg">
+                              <div className="mh__lui-chips">
+                                {(m.luiDayOptions && m.luiDayOptions.length ? m.luiDayOptions : [
+                                  { label: '매일', repeat_days: [0, 1, 2, 3, 4, 5, 6] },
+                                  { label: '평일', repeat_days: [0, 1, 2, 3, 4] },
+                                  { label: '주말', repeat_days: [5, 6] },
+                                ]).map((d) => (
+                                  <button key={d.label} type="button" className="mh__lui-chip" onClick={() => luiReply(m.id, d.label, 'luiNeedDays')}>
+                                    {d.label}
+                                  </button>
+                                ))}
+                              </div>
+                              <div className="mh__lui-days">
+                                {['월', '화', '수', '목', '금', '토', '일'].map((lbl, idx) => (
+                                  <button
+                                    key={lbl}
+                                    type="button"
+                                    className={`mh__lui-day${luiDays.includes(idx) ? ' on' : ''}`}
+                                    aria-pressed={luiDays.includes(idx)}
+                                    onClick={() => setLuiDays((prev) => (prev.includes(idx) ? prev.filter((x) => x !== idx) : [...prev, idx].sort((a, b) => a - b)))}
+                                  >
+                                    {lbl}
+                                  </button>
+                                ))}
+                              </div>
+                              <button
+                                className="mh__gsubmit"
+                                disabled={luiDays.length === 0}
+                                onClick={() => { const picked = luiDays.map((i) => ['월', '화', '수', '목', '금', '토', '일'][i] + '요일').join(', '); setLuiDays([]); luiReply(m.id, picked, 'luiNeedDays') }}
+                              >
+                                이 요일로 선택
+                              </button>
+                            </div>
+                          )}
+                          {/* ── 복약 LUI: 최종 확인(서버 READY_FOR_CONFIRMATION) ── */}
+                          {m.luiConfirm && !m.thinking && (
+                            <div className="mh__guiform mh__guiform--inmsg">
+                              <div className="mh__lui-actions">
+                                <button type="button" className="mh__gsubmit" onClick={() => luiConfirm(m.id)}>알림 등록</button>
+                                <button type="button" className="mh__lui-cancel" onClick={() => luiCancel(m.id)}>취소</button>
+                              </div>
                             </div>
                           )}
                           {m.form && !m.thinking && (

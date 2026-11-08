@@ -68,6 +68,33 @@ export type MedResult =
   | { ok: true; data: unknown }
   | { ok: false; status: number | null; message: string }
 
+// ── 복약 LUI(자연어 등록) 대화 — 서버 /v1/medication-chat/* 응답 (OpenAPI·계약서 기준) ──
+// status 흐름: SELECTING_PRODUCTS → (NEED_TIME → NEED_DAYS) → READY_FOR_CONFIRMATION → confirm
+export interface MedChatOption { id: string; label: string; description?: string }
+export interface MedChatSchedule {
+  times?: string[]
+  repeat_days?: number[] // 앱 요일 체계: 0=월 … 6=일 (계약서 예시 기준)
+  repeat_day_labels?: string[]
+  dose_text?: string | null
+}
+export interface MedChatReply {
+  conversation_id: string
+  // 서버(medication_chat.py) status 전체: time_suggestions·repeat_day_options 는 서버가 안 보내므로 없어도 동작해야 한다.
+  status: 'NEED_INTENT' | 'NEED_PRODUCT_NAME' | 'SELECTING_PRODUCTS' | 'NEED_TIME' | 'NEED_DAYS' | 'READY_FOR_CONFIRMATION' | 'COMPLETED' | 'CANCELLED' | string
+  intent?: string
+  response_type?: 'options' | 'text' | string
+  message: string
+  options?: MedChatOption[]
+  answer?: string // 서버가 있을 때만 보냄
+  time_suggestions?: string[] // 서버 미제공 가능 — 프론트 폴백
+  repeat_day_options?: { label: string; repeat_days: number[] }[] // 서버 미제공 가능 — 프론트 폴백
+  schedule?: MedChatSchedule
+}
+// main medChatCall 의 반환 — 성공 시 data=MedChatReply, 실패 시 status
+export type MedChatResult =
+  | { ok: true; data: MedChatReply }
+  | { ok: false; status: number | null; message: string }
+
 // 2차 PPG(HRV) 측정 결과 — 서버 응답(명세). 완료 감지로 받는다.
 export interface PpgResult {
   id?: string
@@ -148,6 +175,21 @@ const careApi = {
   // 먹었어요/나중에 → 서버 회차 결과 전송. main이 today 조회로 occurrence 매핑 + 오프라인 큐 관리.
   medReportIntake: (p: { serverId: number | string; hhmm: string; eventType: 'TAKEN' | 'SNOOZED'; occurredAt: string; date: string }): Promise<{ ok: boolean; queued?: boolean; status?: number | null }> =>
     ipcRenderer.invoke('med:reportIntake', p),
+  // ── 복약 LUI(자연어 등록) 대화 브리지 — 서버 /v1/medication-chat/* (핸들러는 main, 서버호출은 api.ts call()) ──
+  // 첫 문장은 conversation_id 없이, 이후 선택·시간·요일·확인은 같은 conversation_id 로 이어간다.
+  medChatMessage: (message: string, conversationId?: string): Promise<MedChatResult> =>
+    ipcRenderer.invoke('medchat:message', { message, conversation_id: conversationId }),
+  // product_id 는 서버가 정수만 받음(문자열 422). user_medication_id 도 함께 보낼 수 있게 열어둠(민서님 규격).
+  medChatSelect: (conversationId: string, productId?: number | string, userMedicationId?: number): Promise<MedChatResult> =>
+    ipcRenderer.invoke('medchat:selection', {
+      conversation_id: conversationId,
+      product_id: typeof productId === 'string' ? Number(productId) : productId,
+      user_medication_id: userMedicationId,
+    }),
+  medChatConfirm: (conversationId: string): Promise<MedChatResult> =>
+    ipcRenderer.invoke('medchat:confirm', { conversation_id: conversationId }),
+  medChatCancel: (conversationId: string): Promise<MedChatResult> =>
+    ipcRenderer.invoke('medchat:cancel', { conversation_id: conversationId }),
   // ── 2차 PPG(HRV) 측정 완료 감지 (src/main/ppg.ts) ──
   // QR 띄울 때 session_id 로 감시 시작 → 측정 끝나면 onPpgResult 로 결과 1회 수신(SSE, 폴백 폴링).
   ppgWatch: (sessionId: string): void => ipcRenderer.send('ppg:watch', sessionId),

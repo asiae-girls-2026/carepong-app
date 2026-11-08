@@ -1202,3 +1202,25 @@ body {
 .mh__panel .mh__frame { border: none; border-radius: 0; padding: 0; background: transparent; }
 /* 공략집 오버레이는 패널 기준으로 전체를 덮게(패널 안쪽에 맞춤) */
 .mh__panel .mh__guide { inset: 0; border-radius: 14px; }
+
+/* ── 복약 LUI(자연어 등록) 대화 UI — 시간·요일 선택, 확인 (chat.css 맨 아래에 추가) ── */
+.mh__lui-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.mh__lui-chip {
+  padding: 6px 12px; border: 1px solid #cfe0d8; border-radius: 16px;
+  background: #f3f8f5; color: #2e6e63; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.mh__lui-chip:hover { background: #e5f1ec; }
+.mh__lui-hint { display: block; font-size: 11px; color: #8aa49b; margin-top: 2px; }
+.mh__lui-days { display: flex; gap: 4px; margin: 8px 0 4px; }
+.mh__lui-day {
+  width: 30px; height: 30px; border-radius: 50%; border: 1px solid #cfe0d8;
+  background: #fff; color: #5a6f68; font-size: 12px; font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.mh__lui-day.on { background: #2e6e63; color: #fff; border-color: #2e6e63; }
+.mh__lui-actions { display: flex; gap: 8px; margin-top: 4px; }
+.mh__lui-cancel {
+  padding: 8px 14px; border: 1px solid #e0cfcf; border-radius: 10px;
+  background: #fbf2f2; color: #b05a52; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.mh__lui-cancel:hover { background: #f6e7e7; }
