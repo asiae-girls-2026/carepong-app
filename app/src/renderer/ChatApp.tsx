@@ -35,7 +35,7 @@ import type { UpdateInfo } from '../core/update'
 import type { HealthConfig } from '../core/health'
 import { DEFAULT_HEALTH_CONFIG, DEFAULT_AUX, createMed, addMed, removeMed, updateMed } from '../core/health'
 import { EMPTY_INTAKE, recordMed, recordMedDose, medAllTakenToday, medDoseTakenToday, type IntakeLog } from '../core/intake'
-import { startOfLocalDay, currentDueTime, toServerRepeatDays } from '../core/scheduler'
+import { startOfLocalDay, currentDueTime, toServerRepeatDays, fromServerRepeatDays } from '../core/scheduler'
 import { replyEmpathy } from '../core/empathy'
 import { earnsHeart } from '../core/gibberish' // 난타(자판 뭉개기) 판별 — 하트 적립 전처리(gibberish_filter.py 규칙 포팅)
 import { type ParsedTime } from '../core/medLui'
@@ -497,6 +497,9 @@ export default function ChatApp() {
     return () => clearInterval(id)
   }, [])
 
+  // 미니홈 열 때 1회 — 서버 복약 목록을 로컬에 맞춘다(다른 기기 LUI 등록분 반영, 민서님 권장).
+  useEffect(() => { void syncMedListFromServer() }, [])
+
   // 이 창의 타이핑·클릭도 디지털 마커로 수집 (내용 미저장 — 타이밍·횟수만)
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void =>
@@ -563,11 +566,38 @@ export default function ChatApp() {
     return { thinkingId, started }
   }
   // 서버에 등록된 복약(LUI confirm 결과 등)을 로컬 설정에 반영 — 알림·목록이 최신이 되도록 config 재로딩.
-  const refreshMedList = async (): Promise<void> => {
+  // 앱 시작 시 서버 복약 목록(GET /users/me/medications → items[])을 로컬에 맞춘다(민서님 권장).
+  // 서버에 있는데 로컬에 없는 약(예: 다른 기기에서 LUI로 등록)을 client_medication_id 기준으로 추가.
+  const syncMedListFromServer = async (): Promise<void> => {
     try {
-      const cfg = await window.petApi.loadConfig()
-      setConfig(cfg)
-    } catch { /* 로컬 반영 실패해도 서버 등록은 유효 — 다음 로드 때 반영 */ }
+      const res = await window.careApi.medList?.(true)
+      if (!res?.ok) return
+      const items = ((res.data as { items?: unknown[] })?.items ?? []) as {
+        user_medication_id?: number | string; client_medication_id?: string; product_name?: string
+        item_type?: 'DRUG' | 'HFF'; med_product_id?: number; hff_product_id?: number; dose_text?: string | null
+        schedule_revision?: number; schedule?: { times?: string[]; repeat_days?: number[] }
+      }[]
+      setConfig((c) => {
+        let next = c
+        for (const sm of items) {
+          const localId = sm.client_medication_id || String(sm.user_medication_id ?? '')
+          if (!localId) continue
+          if ((next.medications ?? []).some((x: { id: string }) => x.id === localId)) continue // 이미 있으면 건너뜀
+          const isSupp = sm.item_type === 'HFF'
+          const med = createMed(localId, sm.product_name ?? '약', isSupp, sm.schedule?.times ?? [], fromServerRepeatDays(sm.schedule?.repeat_days ?? []), {})
+          Object.assign(med, {
+            item_type: sm.item_type,
+            product_id: isSupp ? sm.hff_product_id : sm.med_product_id,
+            serverId: sm.user_medication_id,
+            scheduleRevision: sm.schedule_revision,
+            dose: sm.dose_text ?? undefined,
+          })
+          next = addMed(next, med)
+        }
+        if (next !== c) window.petApi.saveConfig(next)
+        return next
+      })
+    } catch { /* 서버 조회 실패 — 다음 실행 때 다시 */ }
   }
 
   const todayKey = Math.floor(Date.now() / 86400000)
@@ -813,11 +843,14 @@ export default function ChatApp() {
     }
     void window.careApi.medRegister?.(body).then((res) => {
       if (res?.ok) {
-        const data = res.data as { user_medication_id?: number | string; schedule_revision?: number }
-        const sid = data?.user_medication_id
+        // 서버 응답은 { medication: {...}, created, synchronized } — medication 안에 user_medication_id·schedule_revision 이 있다.
+        // (구버전 평면 구조도 혹시 몰라 함께 폴백)
+        const d = res.data as { medication?: { user_medication_id?: number | string; schedule_revision?: number }; user_medication_id?: number | string; schedule_revision?: number }
+        const m = d?.medication ?? d
+        const sid = m?.user_medication_id
         if (sid != null) {
           setConfig((c) => {
-            const next = updateMed(c, med.id, { serverId: sid, scheduleRevision: data?.schedule_revision })
+            const next = updateMed(c, med.id, { serverId: sid, scheduleRevision: m?.schedule_revision })
             window.petApi.saveConfig(next)
             return next
           })
@@ -932,7 +965,44 @@ export default function ChatApp() {
     const { thinkingId, started } = pushThinking()
     void sendLuiMessage(text, thinkingId, started)
   }
-  // 최종 확인 [알림 등록] → /confirm → 등록 완료. 기존 로컬 복약 목록·알림과도 동기화되게 목록 새로고침 유도.
+  // LUI confirm 응답의 등록 약(registration.medication)을 로컬 MedSchedule 로 매핑해 추가/갱신 (민서님 매핑 명세).
+  // user_medication_id→serverId, product_name→name, item_type/isSupplement, med_product_id|hff_product_id→product_id,
+  // schedule.times→times, schedule.repeat_days(0=월…6=일)→fromServerRepeatDays→days, dose_text→dose,
+  // schedule_revision→scheduleRevision, client_medication_id→로컬 id(PATCH/DELETE 멱등키 일치).
+  interface ServerMed {
+    user_medication_id?: number | string
+    client_medication_id?: string
+    product_name?: string
+    item_type?: 'DRUG' | 'HFF'
+    med_product_id?: number
+    hff_product_id?: number
+    dose_text?: string | null
+    schedule_revision?: number
+    schedule?: { times?: string[]; repeat_days?: number[] }
+  }
+  const syncLuiMedication = (sm: ServerMed): void => {
+    if (!sm) return
+    const localId = sm.client_medication_id || crypto.randomUUID()
+    const isSupp = sm.item_type === 'HFF'
+    const times = sm.schedule?.times ?? []
+    const days = fromServerRepeatDays(sm.schedule?.repeat_days ?? []) // 서버 0=월…6=일 → 앱 요일
+    const med = createMed(localId, sm.product_name ?? '약', isSupp, times, days, {})
+    Object.assign(med, {
+      item_type: sm.item_type,
+      product_id: isSupp ? sm.hff_product_id : sm.med_product_id,
+      serverId: sm.user_medication_id,
+      scheduleRevision: sm.schedule_revision,
+      dose: sm.dose_text ?? undefined,
+    })
+    setConfig((c) => {
+      // 같은 로컬 id 가 이미 있으면 갱신, 없으면 추가 (confirm 중복 눌림 대비)
+      const exists = (c.medications ?? []).some((x: { id: string }) => x.id === localId)
+      const next = exists ? updateMed(c, localId, med as never) : addMed(c, med)
+      window.petApi.saveConfig(next)
+      return next
+    })
+  }
+  // 최종 확인 [알림 등록] → /confirm → 등록 완료. 서버 응답의 등록 약을 로컬 알림·목록에 바로 반영(방법 2).
   const luiConfirm = (msgId: number): void => {
     setFeeds((prev) => ({ ...prev, med: prev.med.map((m) => (m.id === msgId ? { ...m, luiConfirm: undefined } : m)) }))
     const conv = luiConvRef.current
@@ -944,8 +1014,11 @@ export default function ChatApp() {
       .then((res) => {
         luiConvRef.current = null // 확인했으니 대화 종료
         if (!res.ok) { resolveThinking(thinkingId, { role: 'pet', text: '앗, 등록을 마치지 못했어요. 잠시 후 다시 시도해 주세요.' }, started); return }
+        // confirm 응답에 registration.medication 과 requires_client_sync:true 가 온다 → 로컬 반영.
+        const data = res.data as unknown as { registration?: { medication?: ServerMed }; requires_client_sync?: boolean }
+        const sm = data?.registration?.medication
+        if (sm) syncLuiMedication(sm)
         resolveThinking(thinkingId, { role: 'pet', text: res.data.message || '등록했어요! 제가 시간 맞춰 알려드릴게요 💊' }, started)
-        void refreshMedList() // 서버 등록분을 로컬 목록·알림에 반영
       })
       .catch(() => resolveThinking(thinkingId, { role: 'pet', text: '앗, 등록 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.' }, started))
   }
