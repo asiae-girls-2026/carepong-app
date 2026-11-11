@@ -77,23 +77,51 @@ export interface MedChatSchedule {
   repeat_day_labels?: string[]
   dose_text?: string | null
 }
+// 서버 등록약 1건(MY_MEDICATIONS·SELECTING_REGISTERED 응답의 medications[]) — DDI 선택·조회용.
+// options[].id 가 user_medication_id 로 오는 등록약 선택 단계와 함께 쓴다(F05).
+export interface MedChatRegisteredMed {
+  user_medication_id?: number | string
+  product_name?: string
+  item_type?: 'DRUG' | 'HFF'
+  schedule?: MedChatSchedule
+  [k: string]: unknown // 서버가 더 보내는 필드는 그대로 보존
+}
+// DDI 검사 결과 카드(F09) — confirm 응답에 추가되는 신규 필드. QA7 배포 후 연동.
+export interface MedChatDdiSection {
+  type: 'EVIDENCE' | 'RESULT' | 'CAUTION' | string
+  title?: string
+  items?: string[]
+  product_names?: string[]
+}
 export interface MedChatReply {
-  conversation_id: string
+  conversation_id: string | null // 종료·만료 시 null 로 올 수 있음
   // 서버(medication_chat.py) status 전체: time_suggestions·repeat_day_options 는 서버가 안 보내므로 없어도 동작해야 한다.
-  status: 'NEED_INTENT' | 'NEED_PRODUCT_NAME' | 'SELECTING_PRODUCTS' | 'NEED_TIME' | 'NEED_DAYS' | 'READY_FOR_CONFIRMATION' | 'COMPLETED' | 'CANCELLED' | string
-  intent?: string
+  // DDI·관리 흐름 추가: MANAGE_MEDICATION, SELECTING_REGISTERED, MY_MEDICATIONS, CONVERSATION_EXPIRED, ERROR 등도 string 으로 수용.
+  status: 'NEED_INTENT' | 'NEED_PRODUCT_NAME' | 'SELECTING_PRODUCTS' | 'SELECTING_REGISTERED' | 'MY_MEDICATIONS' | 'NEED_TIME' | 'NEED_DAYS' | 'READY_FOR_CONFIRMATION' | 'MANAGE_MEDICATION' | 'COMPLETED' | 'CANCELLED' | 'CONVERSATION_EXPIRED' | 'ERROR' | string
+  intent?: string // DDI_CHECK · MY_MEDICATIONS_DDI · REMINDER_CREATE · REMINDER_UPDATE 등 — 버튼·말풍선 문구 분기에 보존(F01)
+  operation?: 'REMINDER_UPDATE' | 'REMINDER_DELETE' | 'MEDICATION_REPLACE' | string
   response_type?: 'options' | 'text' | string
   message: string
   options?: MedChatOption[]
   answer?: string // 서버가 있을 때만 보냄
+  // 관리 화면 이동 버튼(F02·F03) — action.type 이 OPEN_MEDICATION_MANAGEMENT 면 '약 등록 관리로 이동' 버튼 노출
+  action?: { type: 'OPEN_MEDICATION_MANAGEMENT' | string; label?: string }
+  medications?: MedChatRegisteredMed[] // MY_MEDICATIONS·SELECTING_REGISTERED: 등록약 목록(F05)
+  selected_products?: unknown[] // 등록약 DDI 선택 누적(F05) — 서버 반영값
+  can_confirm?: boolean // 등록약 2~5개 선택되어 검사 가능할 때 true(F05)
+  ddi_sections_version?: number // DDI 카드 구조 버전(현재 1) — 지원 버전만 카드 렌더(F09)
+  ddi_sections?: MedChatDdiSection[] // DDI 결과 영역들(F09)
+  error_code?: string // 서버 오류 코드(F04) — 화면에 보조 표시
+  request_id?: string
   time_suggestions?: string[] // 서버 미제공 가능 — 프론트 폴백
   repeat_day_options?: { label: string; repeat_days: number[] }[] // 서버 미제공 가능 — 프론트 폴백
   schedule?: MedChatSchedule
 }
-// main medChatCall 의 반환 — 성공 시 data=MedChatReply, 실패 시 status
+// main medChatCall 의 반환 — 성공 시 data=MedChatReply, 실패 시 서버 오류 정보 보존(F04).
+// 실패에도 서버가 준 한국어 message·error_code·conversation_id 를 그대로 전달해 화면이 안내에 쓴다.
 export type MedChatResult =
   | { ok: true; data: MedChatReply }
-  | { ok: false; status: number | null; message: string }
+  | { ok: false; status: number | null; message: string; error_code?: string; conversation_id?: string | null; request_id?: string }
 
 // 2차 PPG(HRV) 측정 결과 — 서버 응답(명세). 완료 감지로 받는다.
 export interface PpgResult {
