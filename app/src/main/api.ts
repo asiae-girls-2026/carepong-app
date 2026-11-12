@@ -24,7 +24,20 @@ let legacyCp: string | null = null
 let token: string | null = null
 let initializing: Promise<void> | null = null
 let flushing: Promise<{ sent: number }> | null = null
-class ApiError extends Error { constructor(public status: number) { super(`API HTTP ${status}`) } }
+// F04: 서버 오류 JSON 본문을 보존한다. 복약 LUI(/medication-chat/*)는 {status:'ERROR', error_code, message(한국어 안내),
+// conversation_id, request_id?} 로 내려오므로 main 의 medCall 이 그대로 렌더러에 전달해 화면 안내에 쓴다(연우 F04 요청).
+export interface ApiErrorBody {
+  message?: string
+  error_code?: string
+  conversation_id?: string | null
+  request_id?: string
+  detail?: unknown // FastAPI 기본 HTTPException 본문(복약 LUI 외 라우터)
+}
+class ApiError extends Error {
+  constructor(public status: number, public body: ApiErrorBody | null = null) {
+    super(body?.message || `API HTTP ${status}`)
+  }
+}
 let userId: string | null = null
 let appVersion = '0.0.0'
 let queueFile: string | null = null
@@ -61,7 +74,11 @@ async function call(
       },
       body: body ? JSON.stringify(body) : undefined,
     })
-    if (!res.ok) throw new ApiError(res.status)
+    if (!res.ok) {
+      let errBody: ApiErrorBody | null = null
+      try { errBody = await res.json() } catch { /* JSON 본문이 아니면 null */ }
+      throw new ApiError(res.status, errBody)
+    }
     return res.status === 204 ? null : await res.json()
   } finally {
     clearTimeout(t)
@@ -419,6 +436,7 @@ export const medChatSelection = (body: {
   user_medication_id?: number | null
 }): Promise<any> => call('POST', `${V}/medication-chat/selections`, body, { timeoutMs: 20000 })
 export const medChatConfirm = (body: { conversation_id: string }): Promise<any> =>
-  call('POST', `${V}/medication-chat/confirm`, body, { timeoutMs: 20000 })
+  // 서버가 DDI Lambda 를 read_timeout 40초로 기다리므로 앱이 먼저 끊지 않도록 60초(ALB idle 60초와 동일). 연우 F04 ③
+  call('POST', `${V}/medication-chat/confirm`, body, { timeoutMs: 60000 })
 export const medChatCancel = (body: { conversation_id: string }): Promise<any> =>
   call('POST', `${V}/medication-chat/cancel`, body)

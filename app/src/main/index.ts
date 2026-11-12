@@ -407,13 +407,26 @@ ipcMain.on('care:openHrv', (_e, ctx: { selfOx: 1 | 0 | null; selfLevel: number |
 
 // ── 복약 2차 서버 동기화 (docs/medication-phase2-api.md) ──
 // 렌더러에서 호출 → main(토큰 보유)이 서버로. 실패해도 로컬 UI·알림·보상은 유지(렌더러가 처리).
-// 공통: 성공 시 {ok:true, data}, 실패 시 {ok:false, status} 반환 — 렌더러가 재시도/큐 판단.
-async function medCall<T>(fn: () => Promise<T>): Promise<{ ok: true; data: T } | { ok: false; status: number | null; message: string }> {
+// 공통: 성공 시 {ok:true, data}, 실패 시 {ok:false, status, message, error_code?, conversation_id?, request_id?} 반환 — 렌더러가 재시도/큐·안내 판단.
+// F04: 서버 오류 JSON(한국어 message·error_code·conversation_id·request_id)을 직렬화해 그대로 전달 (preload MedChatResult 와 동일 형태).
+type MedCallFail = { ok: false; status: number | null; message: string; error_code?: string; conversation_id?: string | null; request_id?: string }
+async function medCall<T>(fn: () => Promise<T>): Promise<{ ok: true; data: T } | MedCallFail> {
   try {
     return { ok: true, data: await fn() }
   } catch (e) {
-    const status = (e as { status?: number }).status ?? null
-    return { ok: false, status, message: (e as Error).message }
+    const err = e as { status?: number; name?: string; message?: string; body?: api.ApiErrorBody | null }
+    const b = err.body ?? {}
+    // 서버 응답 자체가 없을 때(타임아웃 abort·네트워크 끊김)도 한국어 안내가 화면에 뜨도록 보정
+    const fallback = err.name === 'AbortError' ? '서버 응답이 늦어요. 잠시 후 다시 시도해 주세요.'
+      : err.status == null ? '서버에 연결하지 못했어요. 네트워크를 확인해 주세요.' : ''
+    return {
+      ok: false,
+      status: err.status ?? null,
+      message: b.message ?? (fallback || err.message || ''),
+      error_code: b.error_code ?? (err.name === 'AbortError' ? 'CLIENT_TIMEOUT' : err.status == null ? 'NETWORK_ERROR' : undefined),
+      conversation_id: b.conversation_id ?? null,
+      request_id: b.request_id,
+    }
   }
 }
 ipcMain.handle('med:register', (_e, body: Parameters<typeof api.registerMedication>[0]) => medCall(() => api.registerMedication(body)))
