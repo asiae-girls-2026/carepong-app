@@ -168,6 +168,7 @@ export default function App() {
   const [naming, setNaming] = useState(false)
   const [nameInput, setNameInput] = useState('')
   const nameInputRef = useRef<HTMLInputElement | null>(null) // 이름 입력창 — naming 중 키보드 포커스 확보용
+  const qaStressRef = useRef(false) // QA 캡처용으로 띄운 스트레스 팝업 표시 — 예/아니오/X 모두 HRV로 연결(실서비스 로직 불변)
   const [levelUp, setLevelUp] = useState(0)
   const [hearts, setHearts] = useState(0)
   const [rebirthPrompt, setRebirthPrompt] = useState(false)
@@ -912,6 +913,20 @@ export default function App() {
     dismissStressAlert()
     showBubble('다행이에요! 괜히 걱정했네요 😊 하던 일 마저 하세요~', 4000)
   }
+  // ── QA 캡처 전용: 스트레스 팝업의 예/아니오/X 를 모두 HRV QR 측정으로 연결 ──
+  // qaStressRef 가 켜진(=QA 버튼으로 띄운) 팝업에서만 동작. 실서비스 팝업(일반 감지)은 이 경로를 타지 않아 로직 불변.
+  // selfOx 로 예(1)/아니오(0)/X(null) 를 구분해 QR 파라미터에 실어 보낸다.
+  const qaStressToHrv = (selfOx: 1 | 0 | null): boolean => {
+    if (!qaStressRef.current) return false // QA 팝업이 아니면 가로채지 않음 → 기존 동작 유지
+    qaStressRef.current = false
+    stressAlertRef.current = false
+    setStressAlert(false)
+    promptCtxRef.current = null
+    interactive.current = false
+    window.petApi.setClickThrough(true)
+    window.careApi.openHrv({ selfOx, selfLevel: null, trigger: 'manual' }) // 미니홈 열고 HRV QR 띄움
+    return true
+  }
   const openRelief = (): void => {
     // 진입 경로 판별은 응답 전에 (answerStressPrompt 가 promptCtx 를 비움)
     reliefEntryRef.current = promptCtxRef.current ? 'stress_prompt' : 'mind_tab'
@@ -1231,6 +1246,7 @@ export default function App() {
       if (action === 'qa_stresspopup') {
         // 스트레스 체크인 팝업 강제 표시 — onStressAlert 와 동일한 흐름(클릭 받게 + 최상단 + 맥락 세팅)
         if (reliefOpenRef.current || stressAlertRef.current || reminderRef.current) return
+        qaStressRef.current = true // QA 캡처용 표시 → 예/아니오/X 모두 HRV로 연결
         stressAlertRef.current = true
         setStressAlert(true)
         interactive.current = true
@@ -1468,14 +1484,14 @@ export default function App() {
           )}
           {stressAlert && !reminder && (
             <div ref={stressElRef} className={`pet__reminder pet__reminder--stress${reminderCls ? ' ' + reminderCls : ''}`} onPointerDown={(e) => e.stopPropagation()}>
-              <button className="pet__reminder-x" onClick={() => dismissStressAlert('dismissed')} aria-label="닫기">✕</button>
+              <button className="pet__reminder-x" onClick={() => { if (!qaStressToHrv(null)) dismissStressAlert('dismissed') }} aria-label="닫기">✕</button>
               <div className="pet__reminder-text">스트레스를 받고 계신 것 같아요 🥺</div>
               <div className="pet__reminder-detail">지금 스트레스를 받고 계신가요?</div>
               <div className="pet__reminder-actions">
-                <button className="rbtn rbtn--ok" onClick={openRelief}>
+                <button className="rbtn rbtn--ok" onClick={() => { if (!qaStressToHrv(1)) openRelief() }}>
                   예
                 </button>
-                <button className="rbtn" onClick={dismissNotStressed}>
+                <button className="rbtn" onClick={() => { if (!qaStressToHrv(0)) dismissNotStressed() }}>
                   아니요
                 </button>
               </div>
