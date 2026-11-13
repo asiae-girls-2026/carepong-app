@@ -167,6 +167,7 @@ export default function App() {
   const [autoNight, setAutoNight] = useState(false) // 자동 방해금지(야간) 배지·말풍선용(7#3·7#4)
   const [naming, setNaming] = useState(false)
   const [nameInput, setNameInput] = useState('')
+  const nameInputRef = useRef<HTMLInputElement | null>(null) // 이름 입력창 — naming 중 키보드 포커스 확보용
   const [levelUp, setLevelUp] = useState(0)
   const [hearts, setHearts] = useState(0)
   const [rebirthPrompt, setRebirthPrompt] = useState(false)
@@ -678,9 +679,22 @@ export default function App() {
     namingRef.current = false
     interactive.current = false
     window.petApi.setClickThrough(true)
+    window.petApi.setFocusable(false) // 이름 입력 끝 → 키보드 포커스 해제(깜빡임 방지 원복)
     log('rename', 'P07', {})
     showBubble(`반가워요! 저는 ${josa(nm, '이에요', '예요')} 🐣 서로 잘 돌봐줘요, 우리`, 5000)
   }
+
+  // 이름 입력(naming) 중에는 오버레이 창이 키보드 포커스를 받아야 글자가 입력된다.
+  // 오버레이는 평소 focusable:false(깜빡임 방지)라, 이름 프롬프트가 뜨는 순간만 포커스를 켜고
+  // 입력창에 포커스를 준다. 끝나면 confirmName에서 다시 false로 되돌린다.
+  useEffect(() => {
+    if (!naming) return
+    window.petApi.setFocusable(true)
+    interactive.current = true
+    window.petApi.setClickThrough(false)
+    const t = setTimeout(() => nameInputRef.current?.focus(), 60) // 창 포커스 전환 후 입력창에 커서
+    return () => clearTimeout(t)
+  }, [naming])
 
   // ── 알람 표시 + 도래 점검 ──
   const presentReminder = (d: { kind: ReminderKind; id: string; label: string }, now: number): void => {
@@ -1525,6 +1539,7 @@ export default function App() {
         <div className="invite-prompt" onPointerDown={(e) => e.stopPropagation()}>
           <div className="invite-prompt__text">🐣 {({ cat: '냥냥퐁', dragon: '용용퐁' } as Record<string, string>)[pet.creature] ?? pet.creature} · {pet.generation}번째 아이가 태어났어요! 이름을 지어주세요</div>
           <input
+            ref={nameInputRef}
             className="name-input"
             placeholder={`이름 (예: ${pet.name || '퐁이'})`}
             value={nameInput}
