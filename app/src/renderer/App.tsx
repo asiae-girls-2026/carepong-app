@@ -1259,11 +1259,28 @@ export default function App() {
         // 복약·물·스트레칭·휴식 알림 말풍선 강제 표시
         if (reliefOpenRef.current || stressAlertRef.current || reminderRef.current) return
         const kind = (action === 'qa_alarm_med' ? 'medication' : action === 'qa_alarm_water' ? 'water' : action === 'qa_alarm_stretch' ? 'stretch' : 'rest') as ReminderKind
-        const label = kind === 'medication' ? '약 드실 시간이에요 💊' : kind === 'water' ? '물 한 잔 마실 시간이에요 💧' : kind === 'stretch' ? '스트레칭 할 시간이에요 🙆' : '잠깐 휴식할 시간이에요 ☕'
-        interactive.current = true
-        window.petApi.setClickThrough(false)
-        window.petApi.raiseTop?.()
-        setReminder({ kind, id: `qa-${Date.now()}`, label, shownAt: new Date().toISOString() })
+        const show = (id: string, label: string): void => {
+          interactive.current = true
+          window.petApi.setClickThrough(false)
+          window.petApi.raiseTop?.()
+          // label 은 '약 이름'만 넣는다 — REMINDER_UI.medication.text 가 "{약이름} 드실 시간이에요 💊" 로 완성.
+          // 물·스트레칭·휴식은 text 가 고정 문구라 label 을 쓰지 않는다(빈 값).
+          setReminder({ kind, id, label, shownAt: new Date().toISOString() })
+        }
+        if (kind === 'medication') {
+          // QA: 실제 등록한 약과 연동 — 설정에 등록된 약의 이름·id 로 알림을 띄운다(없으면 안내).
+          window.petApi.loadConfig().then((cfg) => {
+            const meds = cfg?.medications ?? []
+            if (meds.length === 0) {
+              showBubble('먼저 약을 등록해 주세요! (약지도 → 약 등록)', 4000)
+              return
+            }
+            const med = meds[0] // 가장 먼저 등록한 약으로 캡처
+            show(med.id, med.name)
+          })
+        } else {
+          show(`qa-${Date.now()}`, '') // 물·스트레칭·휴식은 이름 불필요
+        }
         return
       }
       setPet((prev) => {
