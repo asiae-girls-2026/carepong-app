@@ -176,11 +176,6 @@ export default function App() {
   const [reliefRegion, setReliefRegion] = useState<CSSProperties | null>(null)
   const [reliefRoute1, setReliefRoute1] = useState(false) // Route1(감지 팝업)=1~5 선택+대화 선택지, Route2=2선택
   const [petOpacity, setPetOpacity] = useState(40) // 케어펫 투명도 %(방해금지 중) — 설정 연동
-  const [hrvOffer, setHrvOffer] = useState(false) // 2차 PPG — 자가보고 후 "심박으로 확인해볼까요?" 제안 말풍선
-  const hrvOfferRef = useRef(false) // onMove(이벤트 리스너)가 최신 표시 여부를 읽게 — state 는 stale 이라 ref 병행
-  const hrvOfferCtx = useRef<{ selfOx: 1 | 0 | null; selfLevel: number | null; trigger: string | null }>({ selfOx: null, selfLevel: null, trigger: null })
-  const [hrvOfferKind, setHrvOfferKind] = useState<'yes' | 'no'>('yes') // 제안 말풍선 문구: 예→"심박으로 확인?" / 아니오→"정말 그런지 확인?"
-  const showHrvOffer = (on: boolean): void => { hrvOfferRef.current = on; setHrvOffer(on) }
 
   const lastTickAt = useRef<number>(Date.now())
   const sessionStart = useRef<number>(Date.now())
@@ -217,7 +212,6 @@ export default function App() {
   const reminderAutoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reminderElRef = useRef<HTMLDivElement | null>(null) // 알람 팝업 DOM — hover 영역 정확 판정용
   const stressElRef = useRef<HTMLDivElement | null>(null) // 스트레스 팝업 DOM — 복약 알람처럼 영역 위에서만 클릭 받기(다른 작업 방해 X)
-  const hrvOfferElRef = useRef<HTMLDivElement | null>(null) // HRV 제안 팝업 DOM — 같은 영역 판정(네/나중에/X 가 눌리게)
   // 겹친 알람 대기열 — 메인(reminder)이 떠 있는 10분 사이 도래한 알람들. 표시는 1개 더 + "+N"(제안 반영).
   const [extras, setExtras] = useState<Reminder[]>([])
   const extrasRef = useRef<Reminder[]>([])
@@ -898,20 +892,11 @@ export default function App() {
     log('stress_prompt_answered', 'P03', { answer: yesno === 1 ? 'yes' : yesno === 0 ? 'no' : 'timeout', latency_ms })
     promptCtxRef.current = null
   }
-  // "아니요" — 삼각검증(혜윤님 알고리즘): N도 그냥 끝내지 않고 "정말 그런지 확인?"으로 HRV 측정 유도.
-  // 행동(과부하)과 자가보고(N)가 불일치 → HRV가 심판. 본인이 못 느낀 스트레스를 몸이 반응 중일 수 있어 놓침 방지.
+  // "아니요" — 오탐 확인 응답. 스누즈 처리 + 다행이라는 인사 (추후 감지 모델 라벨로도 활용 가능)
   const dismissNotStressed = (): void => {
-    const trig = promptCtxRef.current?.promptType ?? 'overload' // promptCtx 비우기 전에 trigger 확보
-    answerStressPrompt(0, 'answered') // 자가보고 N 기록(여유=0 라벨)
-    // 스트레스 팝업만 닫고(상태), 클릭은 유지한 채 HRV 제안으로 이어간다.
-    stressAlertRef.current = false
-    setStressAlert(false)
-    promptCtxRef.current = null
-    hrvOfferCtx.current = { selfOx: 0, selfLevel: null, trigger: trig }
-    setHrvOfferKind('no')
-    showHrvOffer(true)
-    window.petApi.raiseTop?.()
-    window.petApi.setClickThrough(false) // 제안 버튼이 눌리도록 클릭 유지
+    answerStressPrompt(0, 'answered')
+    dismissStressAlert()
+    showBubble('다행이에요! 괜히 걱정했네요 😊 하던 일 마저 하세요~', 4000)
   }
   const openRelief = (): void => {
     // 진입 경로 판별은 응답 전에 (answerStressPrompt 가 promptCtx 를 비움)
@@ -972,26 +957,6 @@ export default function App() {
     })
     // 이벤트명은 서버 허용 목록의 stress_score_answered (이전 stress_scale은 거절되어 큐에 쌓임)
     log('stress_score_answered', 'P03', { scale, window_id: reliefWindowIdRef.current })
-    // 2차 PPG — 주관(o/x·1~5) 바로 다음에 생체(HRV)를 같은 순간 재자는 흐름(명세). "확인해볼까요?" 제안.
-    // self_ox=1(예로 들어온 Route1), self_level=scale, trigger=promptType → 미니홈 HRV QR 파라미터로 전달.
-    hrvOfferCtx.current = { selfOx: 1, selfLevel: scale, trigger: reliefTriggerRef.current ?? 'overload' }
-    setHrvOfferKind('yes')
-    showHrvOffer(true)
-    window.petApi.raiseTop?.() // 제안 말풍선을 최상단으로 (버튼이 가려지지 않게)
-    window.petApi.setClickThrough(false) // 버튼이 눌리도록 클릭 받기 (네/나중에 누르면 다시 통과로 복귀)
-  }
-  // "심박으로 확인해볼까요?" — [네] → 미니홈 열고 HRV 측정 자동 오픈(자가보고 맥락 전달) / [나중에] → 닫기
-  const acceptHrvOffer = (): void => {
-    const ctx = hrvOfferCtx.current
-    showHrvOffer(false)
-    window.petApi.setClickThrough(true) // 제안 닫힘 → 다시 클릭 통과(작업 방해 X)
-    // trigger 를 측정 API 값(manual|overload|morning)으로 매핑: spike/과부하 계열 → overload, morning → morning
-    const t = ctx.trigger === 'morning' ? 'morning' : 'overload'
-    window.careApi.openHrv?.({ selfOx: ctx.selfOx, selfLevel: ctx.selfLevel, trigger: t })
-  }
-  const declineHrvOffer = (): void => {
-    showHrvOffer(false)
-    window.petApi.setClickThrough(true)
   }
   // 완화 3번째: {펫이름}과 얘기하기 — 공감챗봇 열기. 보상 없음(하트만)·상한/쿨다운 미포함(기획서 3-2)
   const chatRelief = (): void => {
@@ -1098,10 +1063,8 @@ export default function App() {
       if (reminderRef.current != null) overBubble = overEl(reminderElRef.current)
       // 스트레스 팝업도 복약 알람처럼 '팝업 위에서만' 클릭 받기 — 그래야 응답 전에도 다른 작업이 안 막힌다(기획 상의).
       const overStress = stressAlertRef.current ? overEl(stressElRef.current) : false
-      // HRV 제안 팝업("심박으로 확인?")도 같은 영역 판정 — 이게 빠져서 네/나중에/X 가 안 눌렸다(버그 수정).
-      const overHrvOffer = hrvOfferRef.current ? overEl(hrvOfferElRef.current) : false
-      // 영역 기반: 펫/말풍선/스트레스팝업/HRV제안 위에 있을 때만 클릭을 받고, 벗어나면 통과.
-      const over = overPet || overBubble || overStress || overHrvOffer
+      // 영역 기반: 펫/말풍선/스트레스팝업 위에 있을 때만 클릭을 받고, 벗어나면 통과.
+      const over = overPet || overBubble || overStress
       if (over && !interactive.current) {
         interactive.current = true
         window.petApi.setClickThrough(false)
@@ -1249,6 +1212,30 @@ export default function App() {
   // ── QA 디버그 + 미니홈 이벤트 (대화 하트 등) ──
   useEffect(() => {
     const off = window.petApi.onDebug((action) => {
+      // ── QA 캡처용: 팝업·알림 강제 표시 (setPet 밖에서 처리 — 펫 상태가 아니라 팝업/알림 상태를 건드림) ──
+      // 발표 데모 캡처용. 실제 감지/알림 시각을 기다리지 않고 바로 띄워 화면을 찍을 수 있게 한다.
+      if (action === 'qa_stresspopup') {
+        // 스트레스 체크인 팝업 강제 표시 — onStressAlert 와 동일한 흐름(클릭 받게 + 최상단 + 맥락 세팅)
+        if (reliefOpenRef.current || stressAlertRef.current || reminderRef.current) return
+        stressAlertRef.current = true
+        setStressAlert(true)
+        interactive.current = true
+        window.petApi.setClickThrough(false)
+        window.petApi.raiseTop?.()
+        promptCtxRef.current = { windowId: null, promptType: 'spike', promptTime: new Date().toISOString() }
+        return
+      }
+      if (action === 'qa_alarm_med' || action === 'qa_alarm_water' || action === 'qa_alarm_stretch' || action === 'qa_alarm_rest') {
+        // 복약·물·스트레칭·휴식 알림 말풍선 강제 표시
+        if (reliefOpenRef.current || stressAlertRef.current || reminderRef.current) return
+        const kind = (action === 'qa_alarm_med' ? 'medication' : action === 'qa_alarm_water' ? 'water' : action === 'qa_alarm_stretch' ? 'stretch' : 'rest') as ReminderKind
+        const label = kind === 'medication' ? '약 드실 시간이에요 💊' : kind === 'water' ? '물 한 잔 마실 시간이에요 💧' : kind === 'stretch' ? '스트레칭 할 시간이에요 🙆' : '잠깐 휴식할 시간이에요 ☕'
+        interactive.current = true
+        window.petApi.setClickThrough(false)
+        window.petApi.raiseTop?.()
+        setReminder({ kind, id: `qa-${Date.now()}`, label, shownAt: new Date().toISOString() })
+        return
+      }
       setPet((prev) => {
         if (!prev) return prev
         if (action === 'chat') {
@@ -1476,22 +1463,6 @@ export default function App() {
                 </button>
                 <button className="rbtn" onClick={dismissNotStressed}>
                   아니요
-                </button>
-              </div>
-            </div>
-          )}
-          {/* 2차 PPG — 자가보고 후 HRV 측정 제안. 예→"심박으로 확인?" / 아니오→"정말 그런지 확인?"(삼각검증). [네]→미니홈 HRV, [나중에]→닫기 */}
-          {hrvOffer && !reminder && !stressAlert && (
-            <div ref={hrvOfferElRef} className={`pet__reminder pet__reminder--stress${reminderCls ? ' ' + reminderCls : ''}`} onPointerDown={(e) => e.stopPropagation()}>
-              <button className="pet__reminder-x" onClick={declineHrvOffer} aria-label="닫기">✕</button>
-              <div className="pet__reminder-text">{hrvOfferKind === 'no' ? '정말 그런지 확인해볼까요? 🤔' : '심박으로 확인해볼까요? 💓'}</div>
-              <div className="pet__reminder-detail">{hrvOfferKind === 'no' ? <>몸은 다를 수 있어요.<br />손끝 심박으로 1분이면 돼요</> : <>폰으로 1분이면 돼요.<br />정말 그런지 같이 확인해요</>}</div>
-              <div className="pet__reminder-actions">
-                <button className="rbtn rbtn--ok" onClick={acceptHrvOffer}>
-                  네
-                </button>
-                <button className="rbtn" onClick={declineHrvOffer}>
-                  나중에
                 </button>
               </div>
             </div>

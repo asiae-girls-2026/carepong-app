@@ -1247,3 +1247,6 @@ body {
 .mh__ddi-sec--caution .mh__ddi-badge { background: #fbe3e2; color: #b23c38; }
 .mh__ddi-pair { font-size: 12px; font-weight: 700; color: #5a6f68; margin-bottom: 4px; }
 .mh__ddi-item { font-size: 13px; line-height: 1.5; color: #30403b; margin: 2px 0; white-space: pre-wrap; }
+
+/* QA 캡처용 하위 헤더 여백 */
+.mh__qa-subhead { margin-top: 14px; border-top: 1px dashed #e0cfcf; padding-top: 10px; }
