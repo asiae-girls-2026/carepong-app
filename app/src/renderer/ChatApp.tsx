@@ -296,7 +296,7 @@ const TimeSelect = ({ value, onChange }: { value: string; onChange: (v: string) 
   )
 }
 // QA 전용 테스트 버튼 노출 플래그 — 최종 공개 배포 전에는 false로 바꾸고 빌드하세요(일반 사용자에게 숨김).
-const QA_MODE = true // 발표 데모 캡처용 임시 ON — 캡처 끝나면 다시 false로 바꿔 빌드(일반 사용자에게 숨김)
+const QA_MODE = false // 자동 배포용: QA 전용 버튼 숨김(캡처용 버튼 포함). 다시 캡처할 때만 true로.
 // 하트 적립 기준(Q2-a · 기획서8): 공백 제외 2자 이상 AND 자음/모음(미완성 글자)만이 아닌 메시지만 적립 — 오용(ㄱㄴㄷ·ㅏㅑ) 방지
 // earnsHeart \ub294 core/gibberish.ts \uc5d0\uc11c import. (gibberish_filter.py \uaddc\uce59 \ud3ec\ud305 \u2014 "\u3148\u31379\u3141\ub824" \ub09c\ud0c0 \ucc28\ub2e8, \u314b\u314b\u314b/\u3160\u3160/\u3131\u3145 \ud1b5\uacfc)
 // \ucd5c\uc885 \ud558\ud2b8\ub294 \uc11c\ubc84 source \uac00 'filter'(\uc11c\ubc84\ub3c4 \ub09c\ud0c0 \ud310\uc815) \uac00 \uc544\ub2d0 \ub54c\ub9cc \uc801\ub9bd \u2014 send() \ucc38\uc870.
