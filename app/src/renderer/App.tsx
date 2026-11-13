@@ -1263,9 +1263,10 @@ export default function App() {
           interactive.current = true
           window.petApi.setClickThrough(false)
           window.petApi.raiseTop?.()
-          // label 은 '약 이름'만 넣는다 — REMINDER_UI.medication.text 가 "{약이름} 드실 시간이에요 💊" 로 완성.
-          // 물·스트레칭·휴식은 text 가 고정 문구라 label 을 쓰지 않는다(빈 값).
-          setReminder({ kind, id, label, shownAt: new Date().toISOString() })
+          // 실제 알림 함수(presentReminder)를 그대로 호출 — reminderRef·alarmId·onMove 영역판정까지
+          // 실제 알림과 동일하게 세팅돼, 말풍선 위에서 예/아니오(먹었어요/나중에) 버튼이 정상 눌린다.
+          // label 은 '약 이름'만(medication) — text 가 "{약이름} 드실 시간이에요 💊" 로 완성. 물·스트레칭·휴식은 빈 값.
+          presentReminder({ kind, id, label }, Date.now())
         }
         if (kind === 'medication') {
           // QA: 실제 등록한 약과 연동 — 설정에 등록된 약의 이름·id 로 알림을 띄운다(없으면 안내).
