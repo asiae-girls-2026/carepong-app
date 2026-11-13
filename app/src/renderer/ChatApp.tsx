@@ -2182,9 +2182,7 @@ export default function ChatApp() {
                     <div className="mh__card-head">🧪 QA 전용 <span className="mh__qa-tag">배포 빌드에선 숨김</span></div>
                     <p className="mh__guide-note">테스트용 강제 상태 변경 버튼이에요. 일반 사용자에게는 보이지 않아요.</p>
                     <div className="mh__qa-btns">
-                      <button onClick={() => window.petApi.debug('gauge0')}>게이지 0</button>
                       <button onClick={() => window.petApi.debug('levelup')}>레벨업</button>
-                      <button onClick={() => { window.petApi.debug('heartreset'); setLocalHearts(0) }}>하트 초기화</button>
                       <button onClick={() => window.petApi.debug('heartnext')}>방꾸미기 다음단계</button>
                       <button onClick={() => window.petApi.debug('togglechar')}>캐릭터 전환<br />(냥냥퐁↔용용퐁)</button>
                       <button
